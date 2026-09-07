@@ -19,6 +19,11 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - SQL usa parâmetros, páginas até 200 e cursores ligados à consulta. Proteções/rankings não implementados geram erro explícito.
 - Não editar schema inicial depois que houver dados de produção: adicionar migration com nova versão.
 - Não declarar build nativo ou performance validados com base em bundles/testes TypeScript.
+- `queryAssets` filtra no PhotoKit/MediaStore antes de paginar; não filtrar apenas os 60 itens no JS. Cursores pertencem à categoria e ao período.
+- Screenshots Android usam heurística de nome/pasta; iOS usa subtipo PhotoKit. Não tratar esses resultados como recomendação automática de exclusão.
+- A navegação principal é um Stack: Home com prompt/sugestões, resultados em `/library` e Settings no único botão do cabeçalho. Não reintroduzir abas inferiores.
+- O prompt usa somente regras locais neste incremento: screenshots/prints, vídeos, favoritos, fotos e termos de idade. A rota de resultados mantém filtros e permite voltar para refazer a consulta.
+- Preferência `themeMode` (light/dark) é persistida junto ao idioma; o Home já aplica o fundo escuro e os próximos componentes devem consumir a mesma preferência.
 
 ## Estado Atual das Features
 
@@ -30,6 +35,9 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - [ ] Etapas 7–8: código nativo escrito; falta validação em dispositivo.
 - [x] Código de leitura paginada e thumbnails PhotoKit/MediaStore; validação nativa pendente.
 - [x] Prévia da galeria com FlatList e 60 assets transitórios por página; sem indexação JS.
+- [x] Busca nativa por fotos, vídeos, screenshots, favoritos e itens anteriores a um ano; UI em en/pt-BR/es. Validação em dispositivo pendente.
+- [x] Prévia ampliada com metadados e seleção transitória por página na aba Limpar; ainda sem ação de lixeira.
+- [x] Fluxo de prompt para resultados: comandos locais simples escolhem categoria/idade e abrem a galeria; voltar permite refazer a consulta.
 - [ ] Etapa 9: galeria real conectada ao índice.
 - [ ] Etapa 10: scanner nativo, checkpoints, retomada e indexação incremental.
 - [ ] Etapas 11–21: análise, OCR, busca, limpeza com revisão, regras de intenção e polish.
@@ -47,7 +55,7 @@ Native events do scanner estão declarados, sem emissões fictícias.
 
 ## Ambiente
 
-Node recomendado: 22.22.0; Node local 22.9.0 requer runtime temporário para comandos.
+Node recomendado: 22.22.0 ou compatível; nesta sessão o Node local é 24.20.0.
 JDK Temurin 17 e Android SDK 36 agora estão instalados localmente em `.tools`, ignorado pelo Git e Metro.
 Inclui build-tools 36, platform-tools, NDK 27 e CMake. Sem alterar JAVA_HOME/PATH permanentemente.
 `pnpm build:android:local` configura o ambiente filho. Ver docs/android-local.md.
@@ -59,13 +67,19 @@ APK Android debug arm64 compilado com sucesso via unidade virtual temporária S:
 Backup automático Android está desativado; exclusão de backup iOS do índice precisa ser
 implementada e validada antes de persistir análises pessoais.
 
-Última rodada: typecheck nos seis pacotes, lint e 23 testes passaram. Bundles Android/iOS
-da prévia exportados e APK debug Android gerado. Não há aparelho/emulador conectado ao adb. Ver docs/verification.md.
+Última rodada: typecheck nos seis pacotes, lint e 26 testes passaram. Bundle Android dos
+filtros compilado pelo Metro. APK debug Android atualizado compilado com sucesso e instalado
+no aparelho conectado via adb; execução funcional da galeria ainda precisa ser observada no aparelho.
+Bundles Android/iOS e APK da prévia anterior constam em docs/verification.md.
+
+O APK anterior falhava antes do JavaScript porque `expo.modules.ExpoModulesPackageList` não estava gerada. O `expo prebuild` regenerou o autolinking e o build direto no caminho original corrigiu isso. `tooling/android-build.ts` agora mantém projeto e dependências na mesma raiz para evitar conflito no codegen.
 
 ## Leitura da biblioteca
 
 - API aceita até 200 registros; UI mantém apenas 60 por página, com grid virtualizado.
 - Cursores iOS pertencem a snapshot lazy PHFetchResult e expiram quando a biblioteca muda.
 - Android pagina por ID decrescente; criação usa datetaken, com fallback date_added.
+- `queryAssets` requer novo Development Build. Adapter recusa módulo antigo sem ignorar filtros. Favoritos Android exigem API 30+.
+- Buscar e Limpar reutilizam a galeria paginada; seleção reinicia ao trocar página/filtro ou sair da tela. Ainda não existe plano de limpeza, ranking ou estimativa de espaço recuperável.
 - Thumbnails ficam em cache nativo de até 200 arquivos/~24 MB; iOS não baixa conteúdo do iCloud.
 - Não usar esta API em loop para implementar scanner JS; indexação deve permanecer nativa.

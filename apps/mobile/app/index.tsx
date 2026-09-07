@@ -1,4 +1,4 @@
-import { FoundationScreen } from '../src/screens/FoundationScreen';
+import { AssistantScreen } from '../src/screens/AssistantScreen';
 export default function Home() {
-  return <FoundationScreen screen="home" />;
+  return <AssistantScreen />;
 }

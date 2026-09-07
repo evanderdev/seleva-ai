@@ -1,4 +1,4 @@
-import { FoundationScreen } from '../src/screens/FoundationScreen';
+import { LibraryScreen } from '../src/screens/LibraryScreen';
 export default function Search() {
-  return <FoundationScreen screen="search" />;
+  return <LibraryScreen mode="search" />;
 }

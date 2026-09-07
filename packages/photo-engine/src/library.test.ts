@@ -69,3 +69,65 @@ it('returns unavailable in Expo Go', async () => {
     error: 'DEVICE_UNSUPPORTED',
   });
 });
+
+it('validates filters before native queries and forwards date boundaries', async () => {
+  const native = {
+    ...transport({ assets: [] }),
+    queryAssets: jest.fn(async () => ({ assets: [asset] })),
+  };
+  const reader = createLibraryReader(native);
+  await expect(
+    reader.listAssets({ filter: { category: 'photos', before: -1 } }),
+  ).rejects.toThrow();
+  await expect(
+    reader.listAssets({ filter: { category: 'photos', before: Infinity } }),
+  ).rejects.toThrow();
+  expect(native.queryAssets).not.toHaveBeenCalled();
+  expect(
+    await reader.listAssets({
+      limit: 20,
+      cursor: 'photos:100:2',
+      filter: { category: 'photos', before: 100 },
+    }),
+  ).toEqual({ ok: true, value: { assets: [asset] } });
+  expect(native.queryAssets).toHaveBeenCalledWith(
+    20,
+    'photos:100:2',
+    'photos',
+    100,
+  );
+  expect(native.listAssets).not.toHaveBeenCalled();
+});
+
+it('requires a new native build instead of silently ignoring filters', async () => {
+  const native = transport({ assets: [asset] });
+  expect(
+    await createLibraryReader(native).listAssets({
+      filter: { category: 'screenshots' },
+    }),
+  ).toEqual({ ok: false, error: 'DEVICE_UNSUPPORTED' });
+  expect(native.listAssets).not.toHaveBeenCalled();
+});
+
+it('applies page validation and typed failures to filtered queries', async () => {
+  const native = {
+    ...transport({ assets: [] }),
+    queryAssets: jest.fn<Promise<unknown>, []>(async () => ({
+      assets: [asset, asset],
+    })),
+  };
+  const reader = createLibraryReader(native);
+  expect((await reader.listAssets({ filter: { category: 'videos' } })).ok).toBe(
+    false,
+  );
+  native.queryAssets.mockRejectedValue({
+    code: 'INVALID_CURSOR',
+    message: 'private',
+  });
+  expect(
+    await reader.listAssets({
+      filter: { category: 'favorites' },
+      cursor: 'wrong',
+    }),
+  ).toEqual({ ok: false, error: 'INVALID_CURSOR' });
+});

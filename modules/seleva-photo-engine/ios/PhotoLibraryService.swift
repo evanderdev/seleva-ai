@@ -9,6 +9,7 @@ final class PhotoLibraryService: NSObject, PHPhotoLibraryChangeObserver {
   // PHFetchResult is lazy: only the requested page is materialized into dictionaries.
   private var snapshot: PHFetchResult<PHAsset>?
   private var generation = UUID().uuidString
+  private var queryKey = ""
 
   override init() {
     super.init()
@@ -20,21 +21,34 @@ final class PhotoLibraryService: NSObject, PHPhotoLibraryChangeObserver {
     snapshot = nil
     generation = UUID().uuidString
   }
-  func listAssets(limit: Int, cursor: String?) throws -> [String: Any] {
+  func listAssets(limit: Int, cursor: String?, category: String = "all", before: Double? = nil) throws -> [String: Any] {
     guard (1...200).contains(limit) else { throw LibraryReadError.invalidCursor }
+    guard ["all", "photos", "videos", "screenshots", "favorites"].contains(category) else { throw LibraryReadError.invalidCursor }
+    if let before { guard before.isFinite, before >= 1, before <= 8640000000000000, before.rounded() == before else { throw LibraryReadError.invalidCursor } }
+    let key = "\(category):\(before ?? 0)"
     lock.lock(); defer { lock.unlock() }
     var offset = 0
     if let cursor {
       let parts = cursor.split(separator: ":")
-      guard parts.count == 2, String(parts[0]) == generation,
+      guard parts.count == 2, String(parts[0]) == generation, key == queryKey,
         let value = Int(parts[1]), value >= 0, snapshot != nil else { throw LibraryReadError.invalidCursor }
       offset = value
     } else {
       let options = PHFetchOptions()
-      options.predicate = NSPredicate(format: "mediaType == %d OR mediaType == %d", PHAssetMediaType.image.rawValue, PHAssetMediaType.video.rawValue)
+      var predicates = [NSPredicate(format: "mediaType == %d OR mediaType == %d", PHAssetMediaType.image.rawValue, PHAssetMediaType.video.rawValue)]
+      switch category {
+      case "photos": predicates.append(NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue))
+      case "videos": predicates.append(NSPredicate(format: "mediaType == %d", PHAssetMediaType.video.rawValue))
+      case "screenshots": predicates.append(NSPredicate(format: "(mediaSubtypes & %d) != 0", PHAssetMediaSubtype.photoScreenshot.rawValue))
+      case "favorites": predicates.append(NSPredicate(format: "favorite == YES"))
+      default: break
+      }
+      if let before { predicates.append(NSPredicate(format: "creationDate < %@", NSDate(timeIntervalSince1970: before / 1000))) }
+      options.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
       options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
       snapshot = PHAsset.fetchAssets(with: options)
       generation = UUID().uuidString
+      queryKey = key
     }
     guard let snapshot, offset <= snapshot.count else { throw LibraryReadError.invalidCursor }
     let end = min(snapshot.count, offset + limit)

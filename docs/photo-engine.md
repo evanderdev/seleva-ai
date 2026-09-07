@@ -3,7 +3,7 @@
 `modules/seleva-photo-engine` implementa Expo Modules API; o workspace é vinculado por
 autolinking como dependência. Não há TurboModule manual.
 
-Funções atuais: getCapabilities, getPermission, requestPermission, listAssets e getThumbnail.
+Funções atuais: getCapabilities, getPermission, requestPermission, listAssets, queryAssets e getThumbnail.
 iOS usa PhotoKit authorization readWrite e distingue acesso limitado/restrito.
 Android trata READ_EXTERNAL_STORAGE até API 32, permissões separadas de fotos/vídeos
 na API 33 e acesso selecionado na API 34+. Autorização parcial de um tipo também é limitada.
@@ -32,3 +32,25 @@ Não passar buffers ou originais ao JavaScript. Nenhum arquivo da biblioteca é 
 
 A aba Library exibe uma página transitória de 60 itens via FlatList. Não acumula toda a
 biblioteca em estado React. A persistência/indexação SQLite aguarda o worker nativo.
+
+## Busca e revisão por metadados
+
+`queryAssets(limit, cursor, category, before)` aceita all/photos/videos/screenshots/favorites
+e um limite temporal exclusivo em milissegundos. Zod valida no adapter e Swift/Kotlin
+validam novamente na entrada nativa. Cursores não podem ser reutilizados com outro filtro.
+Filtros executam antes da paginação; nenhum loop JS percorre a biblioteca.
+
+iOS usa predicates de PhotoKit, incluindo o subtipo screenshot. Android usa seleção SQL
+parametrizada e heurística de nome/pasta para screenshots (sujeita a falsos positivos e negativos).
+Favoritos exigem Android 11+; versões anteriores retornam DEVICE_UNSUPPORTED.
+Referências: [PHFetchOptions](https://developer.apple.com/documentation/photos/phfetchoptions)
+e [MediaColumns](https://developer.android.com/reference/android/provider/MediaStore.MediaColumns).
+
+Buscar permite combinar categoria e idade superior a um ano. Limpar permite abrir uma
+prévia de até 512 pixels e selecionar itens da página atual; mudar página/filtro ou sair
+da tela limpa a seleção. Ainda não há exclusão, OCR, detecção de duplicatas ou scanner.
+Tamanho só é mostrado quando o provider o fornece; não consultar APIs privadas PhotoKit
+nem baixar originais para estimar bytes. Vídeos mostram thumbnail e duração, sem reprodução.
+
+É necessário reconstruir o Development Build para disponibilizar queryAssets. Um binário
+antigo retorna indisponibilidade no adapter, sem fallback para resultados sem filtro.

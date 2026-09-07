@@ -1,9 +1,18 @@
 import { z } from 'zod';
 import type { EngineResult } from '@seleva/core';
 
+export const libraryFilterSchema = z.strictObject({
+  category: z
+    .enum(['all', 'photos', 'videos', 'screenshots', 'favorites'])
+    .default('all'),
+  before: z.number().int().min(1).max(8640000000000000).optional(),
+});
+export type LibraryFilter = z.infer<typeof libraryFilterSchema>;
+
 export const libraryPageRequestSchema = z.strictObject({
   limit: z.number().int().min(1).max(200).default(60),
   cursor: z.string().min(1).max(1024).optional(),
+  filter: libraryFilterSchema.optional(),
 });
 const assetSchema = z.strictObject({
   id: z.string().min(1),
@@ -26,6 +35,12 @@ export const thumbnailRequestSchema = z.strictObject({
 });
 export type LibraryPage = z.infer<typeof libraryPageSchema>;
 export interface LibraryTransport {
+  queryAssets?(
+    limit: number,
+    cursor: string | null,
+    category: string,
+    before: number | null,
+  ): Promise<unknown>;
   listAssets(limit: number, cursor: string | null): Promise<unknown>;
   getThumbnail(id: string, size: number): Promise<unknown>;
 }
@@ -57,7 +72,17 @@ export function createLibraryReader(native: LibraryTransport | null) {
       const request = libraryPageRequestSchema.parse(input);
       return invoke(async (module) => {
         const page = libraryPageSchema.parse(
-          await module.listAssets(request.limit, request.cursor ?? null),
+          await (request.filter
+            ? (() => {
+                if (!module.queryAssets) throw { code: 'DEVICE_UNSUPPORTED' };
+                return module.queryAssets(
+                  request.limit,
+                  request.cursor ?? null,
+                  request.filter.category,
+                  request.filter.before ?? null,
+                );
+              })()
+            : module.listAssets(request.limit, request.cursor ?? null)),
         );
         if (
           page.assets.length > request.limit ||

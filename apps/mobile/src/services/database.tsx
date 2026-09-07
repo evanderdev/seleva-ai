@@ -39,9 +39,12 @@ export function DatabaseProvider({ children }: PropsWithChildren) {
     void initialize()
       .then(async (value) => {
         const locale = await value.getPreference('locale');
+        const themeMode = await value.getPreference('themeMode');
         if (!active) return;
         if (locale && locales.includes(locale as Locale))
           usePreferences.getState().setLocale(locale as Locale);
+        if (themeMode === 'dark' || themeMode === 'light')
+          usePreferences.getState().setThemeMode(themeMode);
         setRepository(value);
       })
       .catch(() => {

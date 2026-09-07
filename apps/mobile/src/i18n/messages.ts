@@ -1,7 +1,49 @@
 export const en = {
+  moveToTrash: 'Move selected to trash',
+  deletePermanently: 'Delete permanently',
+  actionsComingSoon:
+    'Actions will be enabled after the native confirmation flow is connected.',
+  appearance: 'Appearance',
+  lightTheme: 'Light',
+  darkTheme: 'Dark',
+  results: 'Your results',
+  assistantTitle: 'Find what matters.',
+  assistantSubtitle: 'Tell Seleva what you want to keep, review or clear.',
+  assistantPlaceholder: 'Ask Seleva…',
+  findPhotos: 'Find photos',
+  suggestions: 'Try asking',
+  cleanScreenshots: 'Clean old screenshots',
+  findBlurry: 'Find blurry photos',
+  largeVideos: 'Review large videos',
+  oldPhotos: 'Find photos from last year',
+  queryUnavailable:
+    'This filter requires a compatible device and the latest SelevaAI development build.',
+  refreshResults: 'Your library changed. Refresh to see the latest results.',
+  filter_all: 'All',
+  filter_photos: 'Photos',
+  filter_videos: 'Videos',
+  filter_screenshots: 'Screenshots',
+  filter_favorites: 'Favorites',
+  olderThanYear: 'More than a year ago',
+  showAllDates: 'Show all dates',
+  openPreview: 'Open preview and details',
+  closePreview: 'Close preview',
+  selectPhoto: 'Select for review',
+  deselectPhoto: 'Remove from selection',
+  selectedOnPage: 'Selected on this page: {{count}}',
+  dimensions: '{{width}} × {{height}} pixels',
+  sizeMB: '{{size}} MB',
+  durationSeconds: '{{seconds}} seconds',
+  screenshotHint:
+    'On Android, screenshots are identified by file or folder name and may be missed or misidentified.',
+  reviewOnly:
+    'Review photos and select items on this page. Selection resets when you change pages or filters. Moving to trash is not available yet.',
+  previewHint:
+    'Local preview up to 512 pixels. Video playback is not available yet.',
+  browseLibrary: 'Explore your photos',
   refreshLibrary: 'Refresh photos',
   nextPhotos: 'Next photos',
-  libraryEmpty: 'No photos available.',
+  libraryEmpty: 'No accessible items match these filters.',
   libraryReadError: 'Photos could not be loaded. Check access and refresh.',
   photoThumbnail: 'Photo preview',
   videoThumbnail: 'Video preview',
@@ -32,7 +74,8 @@ export const en = {
   welcome: 'A little space for what matters.',
   privacyTitle: 'Private by design',
   privacy: 'Your photos stay on your phone. No account. No photo uploads.',
-  foundation: 'Your library will be available here when photo access is ready.',
+  foundation:
+    'Find photos by category and age, open a preview and review your selection.',
   searchHint: 'Find photos by text, date and category. Coming soon.',
   cleanHint:
     'Review every selection before moving anything to trash. Coming soon.',
@@ -44,9 +87,53 @@ export const en = {
 };
 export type Messages = { [K in keyof typeof en]: string };
 export const ptBR: Messages = {
+  moveToTrash: 'Mover seleção para a lixeira',
+  deletePermanently: 'Excluir permanentemente',
+  actionsComingSoon:
+    'As ações serão ativadas quando o fluxo nativo de confirmação estiver conectado.',
+  appearance: 'Aparência',
+  lightTheme: 'Claro',
+  darkTheme: 'Escuro',
+  results: 'Seus resultados',
+  assistantTitle: 'Encontre o que importa.',
+  assistantSubtitle:
+    'Diga ao Seleva o que você quer guardar, revisar ou liberar.',
+  assistantPlaceholder: 'Pergunte ao Seleva…',
+  findPhotos: 'Encontrar fotos',
+  suggestions: 'Experimente pedir',
+  cleanScreenshots: 'Limpar capturas antigas',
+  findBlurry: 'Encontrar fotos borradas',
+  largeVideos: 'Revisar vídeos grandes',
+  oldPhotos: 'Encontrar fotos do ano passado',
+  queryUnavailable:
+    'Este filtro exige um dispositivo compatível e o Development Build atualizado do SelevaAI.',
+  refreshResults:
+    'Sua biblioteca mudou. Atualize para ver os resultados atuais.',
+  filter_all: 'Tudo',
+  filter_photos: 'Fotos',
+  filter_videos: 'Vídeos',
+  filter_screenshots: 'Capturas de tela',
+  filter_favorites: 'Favoritos',
+  olderThanYear: 'Há mais de um ano',
+  showAllDates: 'Mostrar todas as datas',
+  openPreview: 'Abrir prévia e detalhes',
+  closePreview: 'Fechar prévia',
+  selectPhoto: 'Selecionar para revisão',
+  deselectPhoto: 'Remover da seleção',
+  selectedOnPage: 'Selecionados nesta página: {{count}}',
+  dimensions: '{{width}} × {{height}} pixels',
+  sizeMB: '{{size}} MB',
+  durationSeconds: '{{seconds}} segundos',
+  screenshotHint:
+    'No Android, capturas são identificadas pelo nome do arquivo ou pasta; algumas podem não aparecer ou ser identificadas incorretamente.',
+  reviewOnly:
+    'Revise e selecione os itens desta página. A seleção é reiniciada ao trocar de página ou filtro. Mover para a lixeira ainda não está disponível.',
+  previewHint:
+    'Prévia local de até 512 pixels. A reprodução de vídeos ainda não está disponível.',
+  browseLibrary: 'Explorar suas fotos',
   refreshLibrary: 'Atualizar fotos',
   nextPhotos: 'Próximas fotos',
-  libraryEmpty: 'Nenhuma foto disponível.',
+  libraryEmpty: 'Nenhum item acessível corresponde a estes filtros.',
   libraryReadError:
     'Não foi possível carregar as fotos. Verifique o acesso e atualize.',
   photoThumbnail: 'Prévia da foto',
@@ -80,7 +167,7 @@ export const ptBR: Messages = {
   privacyTitle: 'Privacidade desde o início',
   privacy: 'Suas fotos ficam no seu celular. Sem conta. Sem envio de fotos.',
   foundation:
-    'Sua biblioteca aparecerá aqui quando o acesso às fotos estiver pronto.',
+    'Encontre fotos por categoria e idade, abra uma prévia e revise sua seleção.',
   searchHint: 'Encontre fotos por texto, data e categoria. Em breve.',
   cleanHint:
     'Revise cada seleção antes de mover algo para a lixeira. Em breve.',
@@ -91,9 +178,52 @@ export const ptBR: Messages = {
   spanish: 'Español',
 };
 export const es: Messages = {
+  moveToTrash: 'Mover selección a la papelera',
+  deletePermanently: 'Eliminar permanentemente',
+  actionsComingSoon:
+    'Las acciones se activarán cuando se conecte el flujo nativo de confirmación.',
+  appearance: 'Apariencia',
+  lightTheme: 'Claro',
+  darkTheme: 'Oscuro',
+  results: 'Tus resultados',
+  assistantTitle: 'Encuentra lo que importa.',
+  assistantSubtitle: 'Dile a Seleva qué quieres guardar, revisar o liberar.',
+  assistantPlaceholder: 'Pregúntale a Seleva…',
+  findPhotos: 'Encontrar fotos',
+  suggestions: 'Prueba a pedir',
+  cleanScreenshots: 'Limpiar capturas antiguas',
+  findBlurry: 'Encontrar fotos borrosas',
+  largeVideos: 'Revisar vídeos grandes',
+  oldPhotos: 'Encontrar fotos del año pasado',
+  queryUnavailable:
+    'Este filtro requiere un dispositivo compatible y el Development Build actualizado de SelevaAI.',
+  refreshResults:
+    'Tu biblioteca cambió. Actualiza para ver los resultados actuales.',
+  filter_all: 'Todo',
+  filter_photos: 'Fotos',
+  filter_videos: 'Vídeos',
+  filter_screenshots: 'Capturas de pantalla',
+  filter_favorites: 'Favoritos',
+  olderThanYear: 'Hace más de un año',
+  showAllDates: 'Mostrar todas las fechas',
+  openPreview: 'Abrir vista previa y detalles',
+  closePreview: 'Cerrar vista previa',
+  selectPhoto: 'Seleccionar para revisar',
+  deselectPhoto: 'Quitar de la selección',
+  selectedOnPage: 'Seleccionados en esta página: {{count}}',
+  dimensions: '{{width}} × {{height}} píxeles',
+  sizeMB: '{{size}} MB',
+  durationSeconds: '{{seconds}} segundos',
+  screenshotHint:
+    'En Android, las capturas se identifican por el nombre del archivo o carpeta y pueden faltar o identificarse incorrectamente.',
+  reviewOnly:
+    'Revisa y selecciona los elementos de esta página. La selección se reinicia al cambiar de página o filtro. Mover a la papelera aún no está disponible.',
+  previewHint:
+    'Vista previa local de hasta 512 píxeles. La reproducción de vídeos aún no está disponible.',
+  browseLibrary: 'Explorar tus fotos',
   refreshLibrary: 'Actualizar fotos',
   nextPhotos: 'Siguientes fotos',
-  libraryEmpty: 'No hay fotos disponibles.',
+  libraryEmpty: 'Ningún elemento accesible coincide con estos filtros.',
   libraryReadError:
     'No se pudieron cargar las fotos. Revisa el acceso y actualiza.',
   photoThumbnail: 'Vista previa de foto',
@@ -129,7 +259,7 @@ export const es: Messages = {
   privacyTitle: 'Privacidad desde el principio',
   privacy: 'Tus fotos se quedan en tu teléfono. Sin cuenta. Sin subir fotos.',
   foundation:
-    'Tu biblioteca aparecerá aquí cuando el acceso a las fotos esté listo.',
+    'Encuentra fotos por categoría y antigüedad, abre una vista previa y revisa tu selección.',
   searchHint: 'Encuentra fotos por texto, fecha y categoría. Próximamente.',
   cleanHint:
     'Revisa cada selección antes de mover algo a la papelera. Próximamente.',

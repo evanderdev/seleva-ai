@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { usePhotoRepository } from '../services/database';
 import type { Locale } from '../i18n';
 import { LibraryPermissionCard } from '../components/LibraryPermissionCard';
+import { router } from 'expo-router';
 
 export type ScreenName = 'home' | 'search' | 'clean' | 'library' | 'settings';
 const descriptions: Record<Exclude<ScreenName, 'settings'>, keyof Messages> = {
@@ -17,7 +18,7 @@ const descriptions: Record<Exclude<ScreenName, 'settings'>, keyof Messages> = {
 };
 export function FoundationScreen({ screen }: { screen: ScreenName }) {
   const { t } = useTranslation();
-  const { locale, setLocale } = usePreferences();
+  const { locale, setLocale, themeMode, setThemeMode } = usePreferences();
   const repository = usePhotoRepository();
   const [saveError, setSaveError] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -43,9 +44,36 @@ export function FoundationScreen({ screen }: { screen: ScreenName }) {
         {t(screen === 'home' ? 'welcome' : screen)}
       </Text>
       {screen === 'home' && <Text style={styles.body}>{t('tagline')}</Text>}
+      {screen === 'home' && (
+        <>
+          <Button
+            label={t('browseLibrary')}
+            onPress={() => router.push('/library')}
+          />
+          <Button label={t('search')} onPress={() => router.push('/search')} />
+          <Button label={t('clean')} onPress={() => router.push('/clean')} />
+        </>
+      )}
       {(screen === 'home' || screen === 'library') && <LibraryPermissionCard />}
       {screen === 'settings' ? (
         <Card>
+          <Text style={styles.subtitle}>{t('appearance')}</Text>
+          <Button
+            label={t('lightTheme')}
+            selected={themeMode === 'light'}
+            onPress={() => {
+              setThemeMode('light');
+              void repository.setPreference('themeMode', 'light');
+            }}
+          />
+          <Button
+            label={t('darkTheme')}
+            selected={themeMode === 'dark'}
+            onPress={() => {
+              setThemeMode('dark');
+              void repository.setPreference('themeMode', 'dark');
+            }}
+          />
           <Text style={styles.subtitle}>{t('language')}</Text>
           <Button
             label={t('english')}

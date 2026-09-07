@@ -18,9 +18,9 @@ Gradle apenas no processo filho. Gera variante debug para arm64-v8a.
 O plugin `withWindowsNativeBuild` coloca o staging CMake do app em `.tools/cxx`
 no Windows, evitando o limite de 260 caracteres encontrado no codegen do Gesture Handler.
 A configuração é reaplicada pelo prebuild; não editar o Gradle gerado. O cache Gradle
-fica em `.g` para manter os headers transformados dentro do limite de caminhos do Windows.
-No Windows, o script monta temporariamente o projeto como unidade `S:` durante o Gradle e a
-remove ao terminar; a unidade precisa estar livre.
+fica em `.g`. O build mantém o projeto e o `node_modules` no mesmo caminho original,
+pois o codegen do React Native rejeita raízes diferentes (por exemplo, projeto em `S:`
+e dependências em `C:`).
 
 Neste computador, enquanto o Node global não for atualizado:
 

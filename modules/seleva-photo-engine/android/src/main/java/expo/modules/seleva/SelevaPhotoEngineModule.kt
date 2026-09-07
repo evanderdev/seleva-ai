@@ -20,6 +20,7 @@ class SelevaPhotoEngineModule : Module() {
       val service = libraryService ?: PhotoLibraryService(context).also { libraryService = it }
       promise.resolve(action(service))
     } catch (_: SecurityException) { promise.reject("PERMISSION_DENIED", "Photo access required", null) }
+      catch (_: UnsupportedOperationException) { promise.reject("DEVICE_UNSUPPORTED", "Feature unavailable on this device", null) }
       catch (_: java.io.FileNotFoundException) { promise.reject("ASSET_NOT_FOUND", "Asset unavailable", null) }
       catch (_: IllegalArgumentException) { promise.reject("INVALID_CURSOR", "Invalid library request", null) }
       catch (_: Exception) { promise.reject("UNKNOWN", "Library operation failed", null) }
@@ -43,6 +44,9 @@ class SelevaPhotoEngineModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("SelevaPhotoEngine")
     Events("scanProgress", "scanCompleted", "scanFailed", "scanPaused")
+    AsyncFunction("queryAssets") { limit: Int, cursor: String?, category: String, before: Double?, promise: Promise ->
+      libraryOperation(promise) { it.listAssets(limit, cursor, category, before) }
+    }
     AsyncFunction("listAssets") { limit: Int, cursor: String?, promise: Promise ->
       libraryOperation(promise) { it.listAssets(limit, cursor) }
     }

@@ -1,4 +1,4 @@
-import { FoundationScreen } from '../src/screens/FoundationScreen';
+import { LibraryScreen } from '../src/screens/LibraryScreen';
 export default function Clean() {
-  return <FoundationScreen screen="clean" />;
+  return <LibraryScreen mode="clean" />;
 }

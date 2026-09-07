@@ -14,8 +14,11 @@ export const theme = {
   radius: 16,
 } as const;
 
-export function Card({ children }: PropsWithChildren) {
-  return <View style={styles.card}>{children}</View>;
+export function Card({
+  children,
+  dark = false,
+}: PropsWithChildren<{ dark?: boolean }>) {
+  return <View style={[styles.card, dark && styles.darkCard]}>{children}</View>;
 }
 
 export function Button({
@@ -35,7 +38,12 @@ export function Button({
       accessibilityState={{ selected, disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.button,
+        selected && styles.selected,
+        disabled && styles.pressed,
+        pressed && styles.pressed,
+      ]}
     >
       <Text style={styles.buttonText}>{label}</Text>
     </Pressable>
@@ -63,4 +71,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   pressed: { opacity: 0.8 },
+  selected: { borderWidth: 3, borderColor: '#9BD8B6' },
+  darkCard: { backgroundColor: '#24332F' },
 });

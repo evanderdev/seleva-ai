@@ -27,6 +27,9 @@ public class SelevaPhotoEngineModule: Module {
     Name("SelevaPhotoEngine")
     Events("scanProgress", "scanCompleted", "scanFailed", "scanPaused")
     OnDestroy { self.library.close() }
+    AsyncFunction("queryAssets") { (limit: Int, cursor: String?, category: String, before: Double?, promise: Promise) in
+      self.libraryOperation(promise) { try self.library.listAssets(limit: limit, cursor: cursor, category: category, before: before) }
+    }.runOnQueue(libraryQueue)
     AsyncFunction("listAssets") { (limit: Int, cursor: String?, promise: Promise) in
       self.libraryOperation(promise) { try self.library.listAssets(limit: limit, cursor: cursor) }
     }.runOnQueue(libraryQueue)

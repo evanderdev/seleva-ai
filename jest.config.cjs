@@ -1,6 +1,11 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  modulePathIgnorePatterns: [
+    '<rootDir>/.tools/',
+    '<rootDir>/.g/',
+    '<rootDir>/apps/mobile/android/',
+  ],
   testMatch: [
     '<rootDir>/packages/**/*.test.ts',
     '<rootDir>/apps/mobile/src/**/*.test.ts',
