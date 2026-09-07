@@ -1,0 +1,118 @@
+export const en = {
+  permissionIntro:
+    'SelevaAI analyzes your library directly on your phone. Your photos are never uploaded.',
+  connectLibrary: 'Connect photo library',
+  openSettings: 'Open settings',
+  permissionError: 'Photo access could not be updated. Please try again.',
+  'permission_not-determined': 'Choose which photos SelevaAI can access.',
+  permission_authorized: 'Photo access granted.',
+  permission_limited: 'Access is limited to the photos you selected.',
+  permission_denied: 'Photo access was denied. You can change it in settings.',
+  permission_restricted: 'Photo access is restricted by your device.',
+  indexingPending:
+    'Your permission is saved. Library indexing will be available in a future version.',
+  loading: 'Opening your private library…',
+  databaseError: 'Your local library could not be opened. Please try again.',
+  retry: 'Try again',
+  saveError: 'Your preference could not be saved.',
+  brand: 'SelevaAI',
+  tagline: 'Find. Select. Keep.',
+  home: 'Home',
+  search: 'Search',
+  clean: 'Clean',
+  library: 'Library',
+  settings: 'Settings',
+  welcome: 'A little space for what matters.',
+  privacyTitle: 'Private by design',
+  privacy: 'Your photos stay on your phone. No account. No photo uploads.',
+  foundation: 'Your library will be available here when photo access is ready.',
+  searchHint: 'Find photos by text, date and category. Coming soon.',
+  cleanHint:
+    'Review every selection before moving anything to trash. Coming soon.',
+  libraryHint: 'Photo library access is not available in this version yet.',
+  language: 'Language',
+  english: 'English',
+  portuguese: 'Português',
+  spanish: 'Español',
+};
+export type Messages = { [K in keyof typeof en]: string };
+export const ptBR: Messages = {
+  permissionIntro:
+    'O SelevaAI analisa sua biblioteca no seu celular. Suas fotos nunca são enviadas.',
+  connectLibrary: 'Conectar biblioteca',
+  openSettings: 'Abrir ajustes',
+  permissionError:
+    'Não foi possível atualizar o acesso às fotos. Tente novamente.',
+  'permission_not-determined': 'Escolha quais fotos o SelevaAI pode acessar.',
+  permission_authorized: 'Acesso às fotos concedido.',
+  permission_limited: 'O acesso está limitado às fotos que você selecionou.',
+  permission_denied: 'Acesso negado. Você pode alterá-lo nos ajustes.',
+  permission_restricted: 'O acesso às fotos está restrito pelo dispositivo.',
+  indexingPending:
+    'Sua permissão está salva. A indexação estará disponível em uma próxima versão.',
+  loading: 'Abrindo sua biblioteca privada…',
+  databaseError: 'Não foi possível abrir a biblioteca local. Tente novamente.',
+  retry: 'Tentar novamente',
+  saveError: 'Não foi possível salvar sua preferência.',
+  brand: 'SelevaAI',
+  tagline: 'Encontre. Selecione. Guarde.',
+  home: 'Início',
+  search: 'Buscar',
+  clean: 'Limpar',
+  library: 'Biblioteca',
+  settings: 'Ajustes',
+  welcome: 'Mais espaço para o que importa.',
+  privacyTitle: 'Privacidade desde o início',
+  privacy: 'Suas fotos ficam no seu celular. Sem conta. Sem envio de fotos.',
+  foundation:
+    'Sua biblioteca aparecerá aqui quando o acesso às fotos estiver pronto.',
+  searchHint: 'Encontre fotos por texto, data e categoria. Em breve.',
+  cleanHint:
+    'Revise cada seleção antes de mover algo para a lixeira. Em breve.',
+  libraryHint: 'O acesso à biblioteca ainda não está disponível nesta versão.',
+  language: 'Idioma',
+  english: 'English',
+  portuguese: 'Português',
+  spanish: 'Español',
+};
+export const es: Messages = {
+  permissionIntro:
+    'SelevaAI analiza tu biblioteca en tu teléfono. Tus fotos nunca se suben.',
+  connectLibrary: 'Conectar biblioteca',
+  openSettings: 'Abrir ajustes',
+  permissionError:
+    'No se pudo actualizar el acceso a las fotos. Inténtalo de nuevo.',
+  'permission_not-determined':
+    'Elige las fotos a las que SelevaAI puede acceder.',
+  permission_authorized: 'Acceso a fotos concedido.',
+  permission_limited: 'El acceso está limitado a las fotos que seleccionaste.',
+  permission_denied: 'Acceso denegado. Puedes cambiarlo en ajustes.',
+  permission_restricted:
+    'El acceso a fotos está restringido por el dispositivo.',
+  indexingPending:
+    'Tu permiso está guardado. La indexación estará disponible en una próxima versión.',
+  loading: 'Abriendo tu biblioteca privada…',
+  databaseError: 'No se pudo abrir la biblioteca local. Inténtalo de nuevo.',
+  retry: 'Reintentar',
+  saveError: 'No se pudo guardar tu preferencia.',
+  brand: 'SelevaAI',
+  tagline: 'Encuentra. Selecciona. Conserva.',
+  home: 'Inicio',
+  search: 'Buscar',
+  clean: 'Limpiar',
+  library: 'Biblioteca',
+  settings: 'Ajustes',
+  welcome: 'Más espacio para lo que importa.',
+  privacyTitle: 'Privacidad desde el principio',
+  privacy: 'Tus fotos se quedan en tu teléfono. Sin cuenta. Sin subir fotos.',
+  foundation:
+    'Tu biblioteca aparecerá aquí cuando el acceso a las fotos esté listo.',
+  searchHint: 'Encuentra fotos por texto, fecha y categoría. Próximamente.',
+  cleanHint:
+    'Revisa cada selección antes de mover algo a la papelera. Próximamente.',
+  libraryHint: 'El acceso a las fotos aún no está disponible en esta versión.',
+  language: 'Idioma',
+  english: 'English',
+  portuguese: 'Português',
+  spanish: 'Español',
+};

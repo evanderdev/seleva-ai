@@ -1,0 +1,5 @@
+{
+  "extends": "../../tooling/tsconfig.base.json",
+  "include": ["src", "app", "app.config.ts"],
+  "exclude": ["node_modules", "ios", "android"]
+}

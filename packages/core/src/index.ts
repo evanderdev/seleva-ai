@@ -1,0 +1,237 @@
+import { z } from 'zod';
+
+export interface PhotoAsset {
+  id: string;
+  mediaType: 'photo' | 'video';
+  createdAt: number;
+  modifiedAt?: number;
+  width: number;
+  height: number;
+  duration?: number;
+  fileSize?: number;
+  isFavorite?: boolean;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface PhotoAnalysis {
+  photoId: string;
+  analysisVersion: number;
+  modelVersion?: string;
+  analyzedAt: number;
+  blurScore?: number;
+  qualityScore?: number;
+  brightnessScore?: number;
+  faceCount?: number;
+  ocrText?: string;
+  isScreenshot?: boolean;
+  isDocument?: boolean;
+  isMeme?: boolean;
+  perceptualHash?: string;
+}
+
+export interface PhotoQuality {
+  overall: number;
+  blur: number;
+  brightness: number;
+  faceQuality?: number;
+}
+export interface PhotoCluster {
+  id: string;
+  kind: 'exact' | 'visual' | 'similar';
+  representativeId: string;
+  assetCount: number;
+}
+export type ScanStatus =
+  'pending' | 'running' | 'paused' | 'completed' | 'cancelled' | 'failed';
+export interface ScanProgressEvent {
+  jobId: string;
+  processed: number;
+  total: number;
+  progress: number;
+}
+
+export interface DeviceCapabilities {
+  platform: 'ios' | 'android';
+  photoLibrary: boolean;
+  ocr: boolean;
+  faceDetection: boolean;
+  imageClassification: boolean;
+  embeddings: boolean;
+  nativeLLM: boolean;
+  backgroundIndexing: boolean;
+  performanceTier: 'low' | 'medium' | 'high';
+}
+
+export type PhotoPermission =
+  'not-determined' | 'authorized' | 'limited' | 'denied' | 'restricted';
+export const photoPermissionSchema = z.enum([
+  'not-determined',
+  'authorized',
+  'limited',
+  'denied',
+  'restricted',
+]);
+export const deviceCapabilitiesSchema = z.strictObject({
+  platform: z.enum(['ios', 'android']),
+  photoLibrary: z.boolean(),
+  ocr: z.boolean(),
+  faceDetection: z.boolean(),
+  imageClassification: z.boolean(),
+  embeddings: z.boolean(),
+  nativeLLM: z.boolean(),
+  backgroundIndexing: z.boolean(),
+  performanceTier: z.enum(['low', 'medium', 'high']),
+});
+export type PhotoEngineError =
+  | 'PERMISSION_DENIED'
+  | 'LIMITED_ACCESS'
+  | 'ASSET_NOT_FOUND'
+  | 'SCAN_CANCELLED'
+  | 'DEVICE_UNSUPPORTED'
+  | 'OUT_OF_MEMORY'
+  | 'UNKNOWN';
+export type EngineResult<T> =
+  { ok: true; value: T } | { ok: false; error: PhotoEngineError };
+
+export interface ScanJob {
+  id: string;
+  processed: number;
+  total: number;
+  startedAt: number;
+  updatedAt: number;
+  status:
+    'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+  checkpoint?: string;
+  error?: PhotoEngineError;
+}
+
+export const scanOptionsSchema = z.strictObject({
+  batchSize: z.number().int().min(1).max(200).default(100),
+  incremental: z.boolean().default(true),
+});
+export type ScanOptions = z.infer<typeof scanOptionsSchema>;
+
+const timestamp = z.number().int().nonnegative();
+const score = z.number().min(0).max(1);
+export const queryPlanSchema = z.strictObject({
+  target: z
+    .strictObject({
+      minSpaceToRecover: z.number().int().positive().optional(),
+      maxResults: z.number().int().positive().optional(),
+    })
+    .optional(),
+  filters: z
+    .strictObject({
+      before: timestamp.optional(),
+      after: timestamp.optional(),
+      mediaTypes: z.array(z.enum(['photo', 'video'])).optional(),
+      screenshot: z.boolean().optional(),
+      duplicate: z.boolean().optional(),
+      similar: z.boolean().optional(),
+      hasFaces: z.boolean().optional(),
+      labels: z.array(z.string().min(1)).optional(),
+      ocrTerms: z.array(z.string().min(1)).optional(),
+      maxQuality: score.optional(),
+      minBlur: score.optional(),
+      minFileSize: z.number().int().nonnegative().optional(),
+    })
+    .refine(
+      (filters) =>
+        filters.before === undefined ||
+        filters.after === undefined ||
+        filters.after < filters.before,
+      { message: 'INVALID_DATE_RANGE' },
+    )
+    .optional(),
+  exclusions: z
+    .strictObject({
+      favorites: z.boolean().default(true),
+      albums: z.array(z.string()).optional(),
+      importantPeople: z.boolean().optional(),
+    })
+    .default({ favorites: true }),
+  ranking: z
+    .strictObject({
+      strategy: z.enum([
+        'largest',
+        'worst-quality',
+        'most-redundant',
+        'least-important',
+      ]),
+    })
+    .optional(),
+});
+export type QueryPlan = z.infer<typeof queryPlanSchema>;
+export type PhotoQueryPlan = QueryPlan;
+export type CleanupReason =
+  | 'screenshot'
+  | 'duplicate'
+  | 'similar'
+  | 'blurry'
+  | 'large-media'
+  | 'old-media';
+
+export interface CleanupCandidate {
+  photoId: string;
+  confidence: number;
+  reasons: Array<
+    | 'screenshot'
+    | 'duplicate'
+    | 'similar'
+    | 'blurry'
+    | 'large-media'
+    | 'old-media'
+  >;
+  recoverableBytes?: number;
+}
+
+export const pageRequestSchema = z.strictObject({
+  limit: z.number().int().min(1).max(200).default(50),
+  cursor: z.string().min(1).optional(),
+});
+export type PageRequest = z.infer<typeof pageRequestSchema>;
+export interface AssetPage {
+  assets: PhotoAsset[];
+  nextCursor?: string;
+}
+export type PaginatedPhotos = AssetPage;
+export interface PhotoQuery {
+  plan: QueryPlan;
+  page: PageRequest;
+}
+export interface ThumbnailOptions {
+  width: number;
+  height: number;
+}
+export interface TrashResult {
+  trashedIds: string[];
+  cancelled: boolean;
+}
+export interface TrashRequest {
+  ids: string[];
+  userConfirmed: true;
+}
+
+export interface PhotoEngine {
+  getCapabilities(): Promise<EngineResult<DeviceCapabilities>>;
+  requestPermission(): Promise<EngineResult<PhotoPermission>>;
+  startScan(options: ScanOptions): Promise<EngineResult<ScanJob>>;
+  getScanJob(id: string): Promise<EngineResult<ScanJob>>;
+  pauseScan(id: string): Promise<EngineResult<ScanJob>>;
+  resumeScan(id: string): Promise<EngineResult<ScanJob>>;
+  cancelScan(id: string): Promise<EngineResult<ScanJob>>;
+  getAssets(
+    query: QueryPlan,
+    page: PageRequest,
+  ): Promise<EngineResult<AssetPage>>;
+  getThumbnail(
+    id: string,
+    options: ThumbnailOptions,
+  ): Promise<EngineResult<string>>;
+  trashAssets(request: TrashRequest): Promise<EngineResult<TrashResult>>;
+}
+
+export interface IntentProvider {
+  parse(prompt: string, locale: string): Promise<QueryPlan>;
+}

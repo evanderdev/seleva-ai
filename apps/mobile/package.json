@@ -1,0 +1,54 @@
+{
+  "name": "@seleva/mobile",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "expo start --dev-client",
+    "dev:go": "expo start --go",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild",
+    "typecheck": "tsc --noEmit",
+    "export": "expo export --platform all"
+  },
+  "dependencies": {
+    "@seleva/core": "workspace:*",
+    "@seleva/database": "workspace:*",
+    "@seleva/native-photo-engine": "workspace:*",
+    "@seleva/photo-engine": "workspace:*",
+    "@seleva/ui": "workspace:*",
+    "babel-preset-expo": "~57.0.0",
+    "expo": "~57.0.20",
+    "expo-asset": "~57.0.16",
+    "expo-constants": "~57.0.17",
+    "expo-dev-client": "~57.0.18",
+    "expo-font": "~57.0.3",
+    "expo-linking": "~57.0.9",
+    "expo-modules-core": "~57.0.16",
+    "expo-router": "~57.0.19",
+    "expo-sqlite": "~57.0.2",
+    "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.3",
+    "i18next": "^25.6.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-i18next": "^16.2.0",
+    "react-native": "0.86.3",
+    "react-native-reanimated": "4.5.1",
+    "react-native-safe-area-context": "^5.7.0",
+    "react-native-screens": "^4.26.2",
+    "react-native-worklets": "0.10.1",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@react-native/metro-config": "0.86.3",
+    "@types/jest": "^29.5.13",
+    "@types/react": "^19.2.0",
+    "tsx": "4.20.0"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "main": "expo-router/entry"
+}

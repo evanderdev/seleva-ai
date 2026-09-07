@@ -1,0 +1,37 @@
+{
+  "name": "seleva-ai",
+  "private": true,
+  "version": "0.0.1",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "pnpm dev",
+    "android": "pnpm --filter @seleva/mobile android",
+    "ios": "pnpm --filter @seleva/mobile ios",
+    "lint": "eslint .",
+    "typecheck": "turbo run typecheck",
+    "test": "jest --runInBand",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "dev": "pnpm --filter @seleva/mobile dev",
+    "dev:go": "pnpm --filter @seleva/mobile dev:go",
+    "dev:android": "pnpm --filter @seleva/mobile android",
+    "dev:ios": "pnpm --filter @seleva/mobile ios",
+    "prebuild": "pnpm --filter @seleva/mobile prebuild"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/jest": "^29.5.14",
+    "@types/react": "^19.2.0",
+    "eslint": "^9.39.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.6.2",
+    "ts-jest": "^29.4.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.0",
+    "@types/node": "^22.19.0"
+  }
+}
