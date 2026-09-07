@@ -177,6 +177,9 @@ importers:
       '@seleva/native-photo-engine':
         specifier: workspace:*
         version: link:../../modules/seleva-photo-engine
+      zod:
+        specifier: ^4.1.0
+        version: 4.5.4
 
   packages/ui:
     dependencies:

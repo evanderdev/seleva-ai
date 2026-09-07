@@ -1,3 +1,5 @@
 {
-  "NSPhotoLibraryUsageDescription": "O SelevaAI analisa sua biblioteca no seu celular. Suas fotos nunca são enviadas."
+  "ios": {
+    "NSPhotoLibraryUsageDescription": "O SelevaAI analisa sua biblioteca no seu celular. Suas fotos nunca são enviadas."
+  }
 }

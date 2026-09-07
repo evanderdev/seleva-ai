@@ -1,3 +1,5 @@
 {
-  "NSPhotoLibraryUsageDescription": "SelevaAI analiza tu biblioteca en tu teléfono. Tus fotos nunca se suben."
+  "ios": {
+    "NSPhotoLibraryUsageDescription": "SelevaAI analiza tu biblioteca en tu teléfono. Tus fotos nunca se suben."
+  }
 }

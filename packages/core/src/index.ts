@@ -87,6 +87,7 @@ export type PhotoEngineError =
   | 'PERMISSION_DENIED'
   | 'LIMITED_ACCESS'
   | 'ASSET_NOT_FOUND'
+  | 'INVALID_CURSOR'
   | 'SCAN_CANCELLED'
   | 'DEVICE_UNSUPPORTED'
   | 'OUT_OF_MEMORY'

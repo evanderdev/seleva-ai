@@ -26,8 +26,10 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - [x] Etapa 5: SQLite, migration inicial, FTS5, repositórios paginados e testes com SQLite real.
 - [x] Persistência local da preferência de idioma.
 - [x] Etapa 6, código/configuração: Expo Module, CNG, plugin e Development Build.
-- [ ] Etapa 6, validação: compilar e executar em Android e iOS.
-- [ ] Etapas 7–8: permissões nativas escritas; faltam validação em dispositivo, enumeração, metadata e thumbnails.
+- [x] Etapa 6, validação: APK Android debug arm64 compilado; execução em dispositivo e iOS pendentes.
+- [ ] Etapas 7–8: código nativo escrito; falta validação em dispositivo.
+- [x] Código de leitura paginada e thumbnails PhotoKit/MediaStore; validação nativa pendente.
+- [x] Prévia da galeria com FlatList e 60 assets transitórios por página; sem indexação JS.
 - [ ] Etapa 9: galeria real conectada ao índice.
 - [ ] Etapa 10: scanner nativo, checkpoints, retomada e indexação incremental.
 - [ ] Etapas 11–21: análise, OCR, busca, limpeza com revisão, regras de intenção e polish.
@@ -39,20 +41,31 @@ ScanProgressEvent, QueryPlan/PhotoQueryPlan, PhotoQuery, CleanupCandidate, Photo
 `packages/database`: schema version 1, foreign keys, WAL, migration transacional e FTS5
 sincronizado por triggers. Consultas por data/tipo/tamanho/qualidade/screenshots/OCR/labels/clusters.
 Índice ainda vazio: não existe worker que o alimente. `getSummary` não estima espaço recuperável.
-`packages/photo-engine`: adapter de capacidades/permissões; restante do PhotoEngine ainda não implementado.
+`packages/photo-engine`: adapters de capacidades/permissões, leitura paginada e thumbnails.
+O reader nativo alimenta apenas a prévia transitória; o índice ainda depende do scanner.
 Native events do scanner estão declarados, sem emissões fictícias.
 
 ## Ambiente
 
 Node recomendado: 22.22.0; Node local 22.9.0 requer runtime temporário para comandos.
-Nesta máquina não foram encontrados JDK/Android SDK nos locais convencionais.
+JDK Temurin 17 e Android SDK 36 agora estão instalados localmente em `.tools`, ignorado pelo Git e Metro.
+Inclui build-tools 36, platform-tools, NDK 27 e CMake. Sem alterar JAVA_HOME/PATH permanentemente.
+`pnpm build:android:local` configura o ambiente filho. Ver docs/android-local.md.
 iOS exige macOS/Xcode. Validação de compilação nativa e performance permanece pendente.
 Os limites mínimos de SO seguem Expo/RN, não a disponibilidade de IA generativa.
 
-Prebuild Android e autolinking reconheceram o módulo local. Gradle falhou antes de compilar:
-JAVA_HOME não definido e java ausente do PATH. Prebuild iOS foi recusado pelo Expo no Windows.
+Prebuild Android e autolinking reconheceram o módulo local. A falta inicial de Java/SDK foi resolvida;
+APK Android debug arm64 compilado com sucesso via unidade virtual temporária S:. Prebuild iOS foi recusado pelo Expo no Windows.
 Backup automático Android está desativado; exclusão de backup iOS do índice precisa ser
 implementada e validada antes de persistir análises pessoais.
 
-Última rodada: typecheck nos seis pacotes e 17 testes passaram; lint e Expo install --check
-passaram. Autolinking Android/Apple identifica o módulo. Ver docs/verification.md.
+Última rodada: typecheck nos seis pacotes, lint e 23 testes passaram. Bundles Android/iOS
+da prévia exportados e APK debug Android gerado. Não há aparelho/emulador conectado ao adb. Ver docs/verification.md.
+
+## Leitura da biblioteca
+
+- API aceita até 200 registros; UI mantém apenas 60 por página, com grid virtualizado.
+- Cursores iOS pertencem a snapshot lazy PHFetchResult e expiram quando a biblioteca muda.
+- Android pagina por ID decrescente; criação usa datetaken, com fallback date_added.
+- Thumbnails ficam em cache nativo de até 200 arquivos/~24 MB; iOS não baixa conteúdo do iCloud.
+- Não usar esta API em loop para implementar scanner JS; indexação deve permanecer nativa.

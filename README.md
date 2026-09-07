@@ -76,10 +76,16 @@ sem fotos pessoais. O driver de produção é expo-sqlite. Exportar bundles não
 - Migrations SQLite, tabelas iniciais, FTS5, repositório paginado, filtros e idioma persistido.
 - Expo Module Swift/Kotlin para capacidades e permissões; adapter com validação de retorno.
 - CNG, config plugin de permissões e development client local.
+- Leitura nativa paginada, thumbnails locais e prévia virtualizada da galeria com 60 itens por página.
 
-O MVP ainda não está pronto. Faltam enumeração PhotoKit/MediaStore, thumbnails, scanner,
+O MVP ainda não está pronto. Faltam validação em dispositivo, scanner,
 indexação incremental, análise, busca conectada, revisão e lixeira. A tela informa essas limitações.
 Compilação e execução nativas precisam ser validadas com SDK/JDK e macOS/Xcode.
+
+A prévia consulta o SO diretamente e não alimenta o índice em loops JavaScript.
+O worker nativo de indexação será responsável por popular SQLite. O cache de thumbnails
+fica no diretório de cache do app, limitado a 200 arquivos e aproximadamente 24 MB.
+Fotos apenas no iCloud podem aparecer sem thumbnail: não são baixadas pela rede.
 
 ## Dependências e limites
 

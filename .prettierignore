@@ -8,3 +8,8 @@ AGENTS.md
 docs/specification.md
 dist
 .expo
+.tools
+.g
+.gradle
+modules/*/android/build
+modules/*/android/.cxx

@@ -1,4 +1,11 @@
 export const en = {
+  refreshLibrary: 'Refresh photos',
+  nextPhotos: 'Next photos',
+  libraryEmpty: 'No photos available.',
+  libraryReadError: 'Photos could not be loaded. Check access and refresh.',
+  photoThumbnail: 'Photo preview',
+  videoThumbnail: 'Video preview',
+  thumbnailUnavailable: 'Preview unavailable',
   permissionIntro:
     'SelevaAI analyzes your library directly on your phone. Your photos are never uploaded.',
   connectLibrary: 'Connect photo library',
@@ -37,6 +44,14 @@ export const en = {
 };
 export type Messages = { [K in keyof typeof en]: string };
 export const ptBR: Messages = {
+  refreshLibrary: 'Atualizar fotos',
+  nextPhotos: 'Próximas fotos',
+  libraryEmpty: 'Nenhuma foto disponível.',
+  libraryReadError:
+    'Não foi possível carregar as fotos. Verifique o acesso e atualize.',
+  photoThumbnail: 'Prévia da foto',
+  videoThumbnail: 'Prévia do vídeo',
+  thumbnailUnavailable: 'Prévia indisponível',
   permissionIntro:
     'O SelevaAI analisa sua biblioteca no seu celular. Suas fotos nunca são enviadas.',
   connectLibrary: 'Conectar biblioteca',
@@ -76,6 +91,14 @@ export const ptBR: Messages = {
   spanish: 'Español',
 };
 export const es: Messages = {
+  refreshLibrary: 'Actualizar fotos',
+  nextPhotos: 'Siguientes fotos',
+  libraryEmpty: 'No hay fotos disponibles.',
+  libraryReadError:
+    'No se pudieron cargar las fotos. Revisa el acceso y actualiza.',
+  photoThumbnail: 'Vista previa de foto',
+  videoThumbnail: 'Vista previa de vídeo',
+  thumbnailUnavailable: 'Vista previa no disponible',
   permissionIntro:
     'SelevaAI analiza tu biblioteca en tu teléfono. Tus fotos nunca se suben.',
   connectLibrary: 'Conectar biblioteca',

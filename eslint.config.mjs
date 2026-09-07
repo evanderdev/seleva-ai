@@ -11,6 +11,7 @@ export default tseslint.config(
       '**/.turbo/**',
       '**/dist/**',
       '**/.expo/**',
+      '**/.tools/**',
     ],
   },
   eslint.configs.recommended,

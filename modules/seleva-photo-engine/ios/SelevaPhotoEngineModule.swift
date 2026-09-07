@@ -2,6 +2,16 @@ import ExpoModulesCore
 import Photos
 
 public class SelevaPhotoEngineModule: Module {
+  private lazy var library = PhotoLibraryService()
+  private let libraryQueue = DispatchQueue(label: "seleva.library", qos: .userInitiated)
+  private func libraryOperation(_ promise: Promise, operation: () throws -> Any) {
+    let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+    guard status == .authorized || status == .limited else { promise.reject("PERMISSION_DENIED", "Photo access required"); return }
+    do { promise.resolve(try operation()) }
+    catch LibraryReadError.invalidCursor { promise.reject("INVALID_CURSOR", "Refresh the library") }
+    catch LibraryReadError.missingAsset { promise.reject("ASSET_NOT_FOUND", "Asset unavailable locally") }
+    catch { promise.reject("UNKNOWN", "Library operation failed") }
+  }
   private func permission(_ status: PHAuthorizationStatus) -> String {
     switch status {
     case .authorized: return "authorized"
@@ -16,6 +26,13 @@ public class SelevaPhotoEngineModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SelevaPhotoEngine")
     Events("scanProgress", "scanCompleted", "scanFailed", "scanPaused")
+    OnDestroy { self.library.close() }
+    AsyncFunction("listAssets") { (limit: Int, cursor: String?, promise: Promise) in
+      self.libraryOperation(promise) { try self.library.listAssets(limit: limit, cursor: cursor) }
+    }.runOnQueue(libraryQueue)
+    AsyncFunction("getThumbnail") { (id: String, size: Int, promise: Promise) in
+      self.libraryOperation(promise) { try self.library.thumbnail(id: id, size: size) }
+    }.runOnQueue(libraryQueue)
 
     AsyncFunction("getCapabilities") { () -> [String: Any] in
       let memory = ProcessInfo.processInfo.physicalMemory

@@ -11,6 +11,19 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class SelevaPhotoEngineModule : Module() {
+  private var libraryService: PhotoLibraryService? = null
+  @Synchronized private fun libraryOperation(promise: Promise, action: (PhotoLibraryService) -> Any) {
+    val context = appContext.reactContext
+    if (context == null) { promise.reject("DEVICE_UNSUPPORTED", "Context unavailable", null); return }
+    if (permission(context) !in listOf("authorized", "limited")) { promise.reject("PERMISSION_DENIED", "Photo access required", null); return }
+    try {
+      val service = libraryService ?: PhotoLibraryService(context).also { libraryService = it }
+      promise.resolve(action(service))
+    } catch (_: SecurityException) { promise.reject("PERMISSION_DENIED", "Photo access required", null) }
+      catch (_: java.io.FileNotFoundException) { promise.reject("ASSET_NOT_FOUND", "Asset unavailable", null) }
+      catch (_: IllegalArgumentException) { promise.reject("INVALID_CURSOR", "Invalid library request", null) }
+      catch (_: Exception) { promise.reject("UNKNOWN", "Library operation failed", null) }
+  }
   private fun granted(context: Context, permission: String): Boolean =
     context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
@@ -30,6 +43,12 @@ class SelevaPhotoEngineModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("SelevaPhotoEngine")
     Events("scanProgress", "scanCompleted", "scanFailed", "scanPaused")
+    AsyncFunction("listAssets") { limit: Int, cursor: String?, promise: Promise ->
+      libraryOperation(promise) { it.listAssets(limit, cursor) }
+    }
+    AsyncFunction("getThumbnail") { id: String, size: Int, promise: Promise ->
+      libraryOperation(promise) { it.thumbnail(id, size) }
+    }
 
     AsyncFunction("getCapabilities") { promise: Promise ->
       val context = appContext.reactContext

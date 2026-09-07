@@ -7,6 +7,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "build:android:local": "pnpm --filter @seleva/mobile exec tsx ../../tooling/android-build.ts",
     "start": "pnpm dev",
     "android": "pnpm --filter @seleva/mobile android",
     "ios": "pnpm --filter @seleva/mobile ios",

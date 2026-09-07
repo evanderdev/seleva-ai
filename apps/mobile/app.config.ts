@@ -1,6 +1,7 @@
 import 'tsx/cjs';
 import type { ExpoConfig } from 'expo/config';
 import { withPhotoPermissions } from './plugins/withPhotoPermissions';
+import { withWindowsNativeBuild } from './plugins/withWindowsNativeBuild';
 
 const config: ExpoConfig = {
   name: 'SelevaAI',
@@ -30,4 +31,4 @@ const config: ExpoConfig = {
     ['expo-sqlite', { enableFTS: true }],
   ],
 };
-export default withPhotoPermissions(config);
+export default withWindowsNativeBuild(withPhotoPermissions(config));

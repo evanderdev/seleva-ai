@@ -8,5 +8,10 @@ dist/
 !.env.example
 .DS_Store
 .expo/
+.tools/
+.g/
+.gradle/
+modules/*/android/build/
+modules/*/android/.cxx/
 apps/mobile/android/
 apps/mobile/ios/
