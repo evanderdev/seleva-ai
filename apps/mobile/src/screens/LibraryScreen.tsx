@@ -11,6 +11,9 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -19,12 +22,22 @@ import {
   type LibraryPage,
   type LibraryFilter,
 } from '@seleva/photo-engine';
-import { Button, theme } from '@seleva/ui';
-import { LibraryPermissionCard } from '../components/LibraryPermissionCard';
+import {
+  Button,
+  Icon,
+  IconButton,
+  layout,
+  useTheme,
+  type Palette,
+} from '@seleva/ui';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { planPrompt, promptSchema } from '../features/search/prompt';
+import { LibraryStatus } from '../features/library/LibraryStatus';
 import { usePhotoRepository } from '../services/database';
 import type { QueryPlan } from '@seleva/core';
 
-function Thumbnail({
+export function Thumbnail({
   asset,
   expanded = false,
 }: {
@@ -32,6 +45,8 @@ function Thumbnail({
   expanded?: boolean;
 }) {
   const { t } = useTranslation();
+  const colors = useTheme();
+  const styles = createStyles(colors);
   const [uri, setUri] = useState<string>();
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -80,6 +95,7 @@ export function LibraryScreen({
   initialSimilar = false,
   initialMinBlur,
   initialOcrTerms,
+  initialPrompt = '',
 }: {
   mode?: 'library' | 'search' | 'clean';
   initialCategory?: LibraryFilter['category'];
@@ -89,23 +105,73 @@ export function LibraryScreen({
   initialSimilar?: boolean;
   initialMinBlur?: number;
   initialOcrTerms?: string[];
+  initialPrompt?: string;
 }) {
   const { t, i18n } = useTranslation();
+  const colors = useTheme();
+  const styles = createStyles(colors);
   const repository = usePhotoRepository();
   const [category, setCategory] =
     useState<LibraryFilter['category']>(initialCategory);
   const [before, setBefore] = useState<number | undefined>(initialBefore);
-  const [minFileSize] = useState<number | undefined>(initialMinFileSize);
-  const [duplicate] = useState(initialDuplicate);
-  const [similar] = useState(initialSimilar);
-  const [minBlur] = useState<number | undefined>(initialMinBlur);
-  const [ocrTerms] = useState<string[] | undefined>(initialOcrTerms);
+  const [minFileSize, setMinFileSize] = useState<number | undefined>(
+    initialMinFileSize,
+  );
+  const [duplicate, setDuplicate] = useState(initialDuplicate);
+  const [similar, setSimilar] = useState(initialSimilar);
+  const [minBlur, setMinBlur] = useState<number | undefined>(initialMinBlur);
+  const [ocrTerms, setOcrTerms] = useState<string[] | undefined>(
+    initialOcrTerms,
+  );
   const [preview, setPreview] = useState<LibraryPage['assets'][number]>();
   const [selected, setSelected] = useState<string[]>([]);
   const [page, setPage] = useState<LibraryPage>({ assets: [] });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [indexedAssets, setIndexedAssets] = useState(0);
+  const [searchVersion, setSearchVersion] = useState(0);
+  const [prompt, setPrompt] = useState(initialPrompt);
+  const [draft, setDraft] = useState(initialPrompt);
+  const [editing, setEditing] = useState(false);
+  const [invalid, setInvalid] = useState(false);
+  function editSearch() {
+    setDraft(prompt);
+    setInvalid(false);
+    setEditing(true);
+  }
+  function applySearch() {
+    const parsed = promptSchema.safeParse(draft);
+    setInvalid(!parsed.success);
+    if (!parsed.success) return;
+    const plan = planPrompt(parsed.data);
+    setCategory(plan.category);
+    setBefore(plan.before);
+    setMinFileSize(plan.minFileSize);
+    setDuplicate(Boolean(plan.duplicate));
+    setSimilar(Boolean(plan.similar));
+    setMinBlur(plan.minBlur);
+    setOcrTerms(plan.ocrTerms);
+    setSearchVersion((value) => value + 1);
+    setPrompt(parsed.data);
+    setEditing(false);
+  }
+  function clearFilter() {
+    setCategory('all');
+    setBefore(undefined);
+    setMinFileSize(undefined);
+    setDuplicate(false);
+    setSimilar(false);
+    setMinBlur(undefined);
+    setOcrTerms(undefined);
+    setSearchVersion((value) => value + 1);
+    setPrompt('');
+  }
+  function toggle(id: string) {
+    setSelected((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id],
+    );
+  }
   const generation = useRef(0);
   const load = useCallback(
     async (cursor?: string) => {
@@ -118,12 +184,16 @@ export function LibraryScreen({
       try {
         const summary = await repository.getSummary();
         if (request !== generation.current) return;
-        setIndexedAssets(summary.photos + summary.videos);
+
         const canUseIndex =
           summary.photos + summary.videos > 0 &&
           (minFileSize === undefined || summary.photos + summary.videos > 0);
         const requiresAnalysis =
-          duplicate || similar || minBlur !== undefined || Boolean(ocrTerms?.length);
+          duplicate ||
+          similar ||
+          minBlur !== undefined ||
+          minFileSize !== undefined ||
+          Boolean(ocrTerms?.length);
         if (!canUseIndex && requiresAnalysis) {
           setError('DEVICE_UNSUPPORTED');
           setBusy(false);
@@ -131,17 +201,17 @@ export function LibraryScreen({
         }
         const result = canUseIndex
           ? await (async () => {
-            const filters: NonNullable<QueryPlan['filters']> = {};
-            if (category === 'photos') filters.mediaTypes = ['photo'];
-            if (category === 'videos') filters.mediaTypes = ['video'];
-            if (category === 'screenshots') filters.screenshot = true;
-            if (category === 'favorites') filters.favorite = true;
-            if (before !== undefined) filters.before = before;
-            if (minFileSize !== undefined) filters.minFileSize = minFileSize;
-            if (duplicate) filters.duplicate = true;
-            if (similar) filters.similar = true;
-            if (minBlur !== undefined) filters.minBlur = minBlur;
-            if (ocrTerms?.length) filters.ocrTerms = ocrTerms;
+              const filters: NonNullable<QueryPlan['filters']> = {};
+              if (category === 'photos') filters.mediaTypes = ['photo'];
+              if (category === 'videos') filters.mediaTypes = ['video'];
+              if (category === 'screenshots') filters.screenshot = true;
+              if (category === 'favorites') filters.favorite = true;
+              if (before !== undefined) filters.before = before;
+              if (minFileSize !== undefined) filters.minFileSize = minFileSize;
+              if (duplicate) filters.duplicate = true;
+              if (similar) filters.similar = true;
+              if (minBlur !== undefined) filters.minBlur = minBlur;
+              if (ocrTerms?.length) filters.ocrTerms = ocrTerms;
               const page = await repository.query(
                 { filters, exclusions: { favorites: false } },
                 { limit: 60, cursor },
@@ -173,6 +243,7 @@ export function LibraryScreen({
       minBlur,
       ocrTerms,
       repository,
+      searchVersion,
     ],
   );
   useFocusEffect(
@@ -195,34 +266,64 @@ export function LibraryScreen({
     }, [load]),
   );
   return (
-    <View style={styles.screen}>
+    <SafeAreaView style={styles.screen}>
+      <ScreenHeader title={t('results')} onSearch={editSearch} />
       <FlatList
         data={page.assets}
-        numColumns={3}
+        numColumns={2}
+        columnWrapperStyle={{ gap: 10 }}
         keyExtractor={(asset) => asset.id}
         renderItem={({ item }) => (
-          <Pressable
+          <View
             style={[styles.tile, selected.includes(item.id) && styles.selected]}
-            accessibilityRole="button"
-            accessibilityLabel={t('openPreview')}
-            onPress={() => setPreview(item)}
-            onLongPress={() => {
-              if (mode !== 'clean') return;
-              setSelected((current) =>
-                current.includes(item.id)
-                  ? current.filter((id) => id !== item.id)
-                  : [...current, item.id],
-              );
-            }}
           >
-            <Thumbnail asset={item} />
-            <Text style={styles.placeholder}>
-              {t(
-                item.mediaType === 'video' ? 'filter_videos' : 'filter_photos',
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('openPreview')}
+              style={{ flex: 1, borderRadius: 18, overflow: 'hidden' }}
+              onPress={() => setPreview(item)}
+            >
+              <Thumbnail asset={item} />
+              <View style={styles.caption}>
+                <Text
+                  style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}
+                >
+                  {t(
+                    item.mediaType === 'video'
+                      ? 'filter_videos'
+                      : 'filter_photos',
+                  )}
+                </Text>
+              </View>
+            </Pressable>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityLabel={t(
+                selected.includes(item.id) ? 'deselectPhoto' : 'selectPhoto',
               )}
-              {selected.includes(item.id) ? ' ✓' : ''}
-            </Text>
-          </Pressable>
+              accessibilityState={{ checked: selected.includes(item.id) }}
+              onPress={() => toggle(item.id)}
+              style={styles.selectionTarget}
+            >
+              <View
+                style={[
+                  styles.selectionCircle,
+                  {
+                    backgroundColor: selected.includes(item.id)
+                      ? colors.accent
+                      : 'rgba(255,255,255,0.15)',
+                    borderColor: selected.includes(item.id)
+                      ? colors.accent
+                      : '#FFFFFF',
+                  },
+                ]}
+              >
+                {selected.includes(item.id) && (
+                  <Icon name="check" color={colors.primary} size={15} />
+                )}
+              </View>
+            </Pressable>
+          </View>
         )}
         initialNumToRender={12}
         maxToRenderPerBatch={6}
@@ -230,61 +331,103 @@ export function LibraryScreen({
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.title}>{t(mode)}</Text>
-            {indexedAssets > 0 && (
-              <Text style={styles.placeholder}>
-                {t('indexedCount', { count: indexedAssets })}
-              </Text>
-            )}
-            <LibraryPermissionCard />
-            <ScrollView horizontal contentContainerStyle={styles.filters}>
-              {(
-                ['all', 'photos', 'videos', 'screenshots', 'favorites'] as const
-              ).map((value) => (
-                <Button
-                  key={value}
-                  label={t(`filter_${value}`)}
-                  selected={category === value}
-                  onPress={() => setCategory(value)}
-                />
-              ))}
-            </ScrollView>
-            <Button
-              label={t(before ? 'showAllDates' : 'olderThanYear')}
-              selected={before !== undefined}
-              onPress={() => {
-                const date = new Date();
-                date.setFullYear(date.getFullYear() - 1);
-                setBefore(before === undefined ? date.getTime() : undefined);
-              }}
-            />
-            {category === 'screenshots' && (
-              <Text style={styles.placeholder}>{t('screenshotHint')}</Text>
-            )}
-            {minFileSize !== undefined && (
-              <Text style={styles.placeholder}>{t('largeMediaHint')}</Text>
-            )}
-            {(duplicate || similar || minBlur !== undefined || ocrTerms?.length) && (
-              <Text style={styles.placeholder}>{t('analysisFilterHint')}</Text>
-            )}
-            {mode === 'clean' && <Text>{t('reviewOnly')}</Text>}
-            {selected.length > 0 && (
-              <Text>{t('selectedOnPage', { count: selected.length })}</Text>
-            )}
-            <Button
-              label={t('refreshLibrary')}
-              disabled={busy}
-              onPress={() => {
-                void load();
-              }}
-            />
+            <Text style={[layout.eyebrow, { color: colors.muted }]}>
+              {t('smartSelection')}
+            </Text>
+            <Text style={[layout.title, { color: colors.text }]}>
+              {t('foundTitle')}
+            </Text>
+            <Text style={[layout.body, { color: colors.muted }]}>
+              {t('foundDescription')}
+            </Text>
+            <View
+              style={[
+                layout.row,
+                { flexWrap: 'wrap', marginTop: 10, marginBottom: 18 },
+              ]}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('removeFilter')}
+                onPress={clearFilter}
+                style={[
+                  layout.row,
+                  {
+                    maxWidth: '100%',
+                    backgroundColor: colors.primary,
+                    borderRadius: 22,
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                  },
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: colors.onPrimary,
+                    fontSize: 12,
+                    maxWidth: '85%',
+                  }}
+                >
+                  {prompt ||
+                    t(
+                      duplicate
+                        ? 'findDuplicates'
+                        : similar
+                          ? 'similarPhotos'
+                          : minBlur !== undefined
+                            ? 'findBlurry'
+                            : minFileSize !== undefined
+                              ? 'largeVideos'
+                              : before
+                                ? 'olderThanYear'
+                                : 'filter_' + category,
+                    )}
+                </Text>
+                <Icon name="close" color={colors.onPrimary} size={14} />
+              </Pressable>
+              <Button
+                variant="outline"
+                label={t('editFilter') + '  ?'}
+                onPress={editSearch}
+              />
+            </View>
+            <View style={[layout.row, { justifyContent: 'space-between' }]}>
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: colors.text, fontSize: 14 }}>
+                  {t('itemsOnPage', { count: page.assets.length })}
+                </Text>
+                <Text style={{ color: colors.muted, fontSize: 12 }}>
+                  {t('selectionCount', { count: selected.length })}
+                </Text>
+              </View>
+              <Button
+                variant="outline"
+                label={t(
+                  selected.length === page.assets.length && selected.length > 0
+                    ? 'clearSelection'
+                    : 'selectAll',
+                )}
+                disabled={busy || !page.assets.length}
+                onPress={() =>
+                  setSelected(
+                    selected.length === page.assets.length
+                      ? []
+                      : page.assets.map((asset) => asset.id),
+                  )
+                }
+              />
+            </View>
           </View>
         }
         ListEmptyComponent={
           busy ? (
             <ActivityIndicator />
           ) : (
-            <Text accessibilityRole={error ? 'alert' : undefined}>
+            <Text
+              style={{ color: colors.muted }}
+              accessibilityRole={error ? 'alert' : undefined}
+            >
               {t(
                 error === 'DEVICE_UNSUPPORTED'
                   ? 'queryUnavailable'
@@ -298,17 +441,135 @@ export function LibraryScreen({
           )
         }
         ListFooterComponent={
-          page.nextCursor ? (
+          <View style={{ gap: 12, paddingTop: 18, paddingBottom: 24 }}>
+            {selected.length > 0 && (
+              <Button
+                label={t('reviewSelection')}
+                onPress={() =>
+                  setPreview(
+                    page.assets.find((asset) => selected.includes(asset.id)),
+                  )
+                }
+              />
+            )}
             <Button
-              label={t('nextPhotos')}
+              variant="outline"
+              label={t('refreshLibrary')}
               disabled={busy}
-              onPress={() => {
-                void load(page.nextCursor);
-              }}
+              onPress={() => void load()}
             />
-          ) : null
+            {page.nextCursor && (
+              <Button
+                label={t('nextPhotos')}
+                disabled={busy}
+                onPress={() => void load(page.nextCursor)}
+              />
+            )}
+            <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>
+              {t('reviewOnly')}
+            </Text>
+            {error && <LibraryStatus />}
+          </View>
         }
       />
+      <Modal
+        visible={editing}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditing(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{
+            flex: 1,
+            justifyContent: 'flex-end',
+            backgroundColor: colors.overlay,
+          }}
+        >
+          <Pressable
+            style={{ flex: 1 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('cancel')}
+            onPress={() => setEditing(false)}
+          />
+          <SafeAreaView
+            edges={['bottom']}
+            style={{
+              backgroundColor: colors.background,
+              borderTopLeftRadius: 30,
+              borderTopRightRadius: 30,
+              marginHorizontal: 16,
+            }}
+          >
+            <View
+              accessibilityViewIsModal
+              style={[layout.content, { padding: 20, gap: 16 }]}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: colors.border,
+                  alignSelf: 'center',
+                  marginBottom: 6,
+                }}
+              />
+              <View style={[layout.row, { justifyContent: 'space-between' }]}>
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: '600',
+                    color: colors.text,
+                  }}
+                >
+                  {t('adjustSearch')}
+                </Text>
+                <IconButton
+                  name="close"
+                  label={t('cancel')}
+                  onPress={() => setEditing(false)}
+                />
+              </View>
+              <View
+                style={[
+                  layout.row,
+                  {
+                    borderColor: colors.selectionBorder,
+                    borderWidth: 1,
+                    borderRadius: 18,
+                    paddingHorizontal: 16,
+                    backgroundColor: colors.surface,
+                  },
+                ]}
+              >
+                <Icon name="search" />
+                <TextInput
+                  autoFocus
+                  value={draft}
+                  onChangeText={setDraft}
+                  maxLength={500}
+                  onSubmitEditing={applySearch}
+                  returnKeyType="search"
+                  accessibilityLabel={t('adjustSearch')}
+                  placeholder={t('assistantPlaceholder')}
+                  placeholderTextColor={colors.muted}
+                  style={{ flex: 1, minHeight: 50, color: colors.text }}
+                />
+              </View>
+              {invalid && (
+                <Text accessibilityRole="alert" style={{ color: colors.text }}>
+                  {t('invalidPrompt')}
+                </Text>
+              )}
+              <Button
+                label={t('updateResults') + '  ?'}
+                onPress={applySearch}
+              />
+            </View>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </Modal>
       <Modal
         visible={preview !== undefined}
         animationType="slide"
@@ -323,18 +584,49 @@ export function LibraryScreen({
               label={t('closePreview')}
               onPress={() => setPreview(undefined)}
             />
+            {selected.length > 0 && (
+              <ScrollView
+                horizontal
+                style={{ flexGrow: 0 }}
+                contentContainerStyle={{ gap: 8 }}
+              >
+                {page.assets
+                  .filter((asset) => selected.includes(asset.id))
+                  .map((asset) => (
+                    <Pressable
+                      key={asset.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('openPreview')}
+                      onPress={() => setPreview(asset)}
+                      style={{
+                        width: 64,
+                        height: 76,
+                        borderRadius: 12,
+                        overflow: 'hidden',
+                        borderWidth: 2,
+                        borderColor:
+                          asset.id === preview.id
+                            ? colors.selectionBorder
+                            : 'transparent',
+                      }}
+                    >
+                      <Thumbnail asset={asset} />
+                    </Pressable>
+                  ))}
+              </ScrollView>
+            )}
             <Thumbnail asset={preview} expanded />
-            <Text>
+            <Text style={{ color: colors.text }}>
               {new Date(preview.createdAt).toLocaleDateString(i18n.language)}
             </Text>
-            <Text>
+            <Text style={{ color: colors.text }}>
               {t('dimensions', {
                 width: preview.width,
                 height: preview.height,
               })}
             </Text>
             {preview.fileSize !== undefined && (
-              <Text>
+              <Text style={{ color: colors.text }}>
                 {t('sizeMB', {
                   size: (preview.fileSize / 1048576).toLocaleString(
                     i18n.language,
@@ -344,13 +636,17 @@ export function LibraryScreen({
               </Text>
             )}
             {preview.duration !== undefined && (
-              <Text>
+              <Text style={{ color: colors.text }}>
                 {t('durationSeconds', {
                   seconds: Math.round(preview.duration),
                 })}
               </Text>
             )}
-            {preview.isFavorite && <Text>{t('filter_favorites')}</Text>}
+            {preview.isFavorite && (
+              <Text style={{ color: colors.text }}>
+                {t('filter_favorites')}
+              </Text>
+            )}
             {(category === 'screenshots' ||
               duplicate ||
               similar ||
@@ -360,16 +656,42 @@ export function LibraryScreen({
               Boolean(ocrTerms?.length)) && (
               <View style={styles.reasons}>
                 <Text style={styles.reasonTitle}>{t('whySelected')}</Text>
-                {category === 'screenshots' && <Text>{t('reasonScreenshot')}</Text>}
-                {duplicate && <Text>{t('reasonDuplicate')}</Text>}
-                {similar && <Text>{t('reasonSimilar')}</Text>}
-                {minBlur !== undefined && <Text>{t('reasonBlurry')}</Text>}
-                {minFileSize !== undefined && <Text>{t('reasonLargeMedia')}</Text>}
-                {before !== undefined && <Text>{t('reasonOldMedia')}</Text>}
-                {ocrTerms?.length ? <Text>{t('reasonOcr')}</Text> : null}
+                {category === 'screenshots' && (
+                  <Text style={{ color: colors.text }}>
+                    {t('reasonScreenshot')}
+                  </Text>
+                )}
+                {duplicate && (
+                  <Text style={{ color: colors.text }}>
+                    {t('reasonDuplicate')}
+                  </Text>
+                )}
+                {similar && (
+                  <Text style={{ color: colors.text }}>
+                    {t('reasonSimilar')}
+                  </Text>
+                )}
+                {minBlur !== undefined && (
+                  <Text style={{ color: colors.text }}>
+                    {t('reasonBlurry')}
+                  </Text>
+                )}
+                {minFileSize !== undefined && (
+                  <Text style={{ color: colors.text }}>
+                    {t('reasonLargeMedia')}
+                  </Text>
+                )}
+                {before !== undefined && (
+                  <Text style={{ color: colors.text }}>
+                    {t('reasonOldMedia')}
+                  </Text>
+                )}
+                {ocrTerms?.length ? (
+                  <Text style={{ color: colors.text }}>{t('reasonOcr')}</Text>
+                ) : null}
               </View>
             )}
-            {mode === 'clean' && (
+            {
               <Button
                 label={t(
                   selected.includes(preview.id)
@@ -384,17 +706,15 @@ export function LibraryScreen({
                   );
                 }}
               />
-            )}
-            {mode === 'clean' && selected.length > 0 && (
+            }
+            {selected.length > 0 && (
               <>
                 <Button
                   label={t('moveToTrash')}
                   disabled={busy}
                   onPress={() => {
                     const ids = [...selected];
-                    const bytes = page.assets
-                      .filter((asset) => ids.includes(asset.id))
-                      .reduce((sum, asset) => sum + (asset.fileSize ?? 0), 0);
+
                     Alert.alert(
                       t('confirmMoveToTrashTitle'),
                       t('confirmMoveToTrashMessage', { count: ids.length }),
@@ -406,29 +726,49 @@ export function LibraryScreen({
                           onPress: () => {
                             void (async () => {
                               setBusy(true);
-                              const result = await libraryReader.trashAssets?.({
-                                ids,
-                                userConfirmed: true,
-                              });
-                              if (!result || !result.ok) {
-                                setError(
-                                  result && !result.ok
-                                    ? result.error
-                                    : 'DEVICE_UNSUPPORTED',
+                              try {
+                                const result =
+                                  await libraryReader.trashAssets?.({
+                                    ids,
+                                    userConfirmed: true,
+                                  });
+                                if (!result || !result.ok) {
+                                  setError(
+                                    result && !result.ok
+                                      ? result.error
+                                      : 'DEVICE_UNSUPPORTED',
+                                  );
+                                  setBusy(false);
+                                  return;
+                                }
+                                await repository.removeAssets(
+                                  result.value.trashedIds,
                                 );
+                                await repository.recordCleanup(
+                                  result.value.trashedIds,
+                                  page.assets
+                                    .filter((asset) =>
+                                      result.value.trashedIds.includes(
+                                        asset.id,
+                                      ),
+                                    )
+                                    .reduce(
+                                      (sum, asset) =>
+                                        sum + (asset.fileSize ?? 0),
+                                      0,
+                                    ),
+                                  result.value.cancelled
+                                    ? 'cancelled'
+                                    : 'trashed',
+                                );
+                                setSelected([]);
+                                setPreview(undefined);
                                 setBusy(false);
-                                return;
+                                void load();
+                              } catch {
+                                setError('UNKNOWN');
+                                setBusy(false);
                               }
-                              await repository.removeAssets(result.value.trashedIds);
-                              await repository.recordCleanup(
-                                result.value.trashedIds,
-                                bytes,
-                                result.value.cancelled ? 'cancelled' : 'trashed',
-                              );
-                              setSelected([]);
-                              setPreview(undefined);
-                              setBusy(false);
-                              void load();
                             })();
                           },
                         },
@@ -439,39 +779,80 @@ export function LibraryScreen({
                 <Text style={styles.placeholder}>{t('trashSafetyNote')}</Text>
               </>
             )}
+            {error && (
+              <Text accessibilityRole="alert" style={{ color: colors.text }}>
+                {t('libraryReadError')}
+              </Text>
+            )}
             <Text style={styles.placeholder}>{t('previewHint')}</Text>
           </ScrollView>
         )}
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.colors.background },
-  content: { padding: 16, gap: 8 },
-  header: { gap: 12, marginBottom: 16 },
-  title: { fontSize: 28, color: theme.colors.text, fontWeight: '700' },
-  filters: { gap: 8 },
-  modal: {
-    padding: 24,
-    paddingTop: 48,
-    backgroundColor: theme.colors.background,
-  },
-  preview: { width: '100%', height: 400, justifyContent: 'center' },
-  thumbnail: { flex: 1, justifyContent: 'center' },
-  selected: {
-    borderWidth: 3,
-    borderColor: theme.colors.primary,
-    borderRadius: 8,
-  },
-  tile: {
-    width: '33.333%',
-    aspectRatio: 1,
-    padding: 2,
-    justifyContent: 'center',
-  },
-  image: { width: '100%', height: '100%', borderRadius: 8 },
-  placeholder: { color: theme.colors.muted, textAlign: 'center', fontSize: 12 },
-  reasons: { gap: 4, padding: 12, backgroundColor: theme.colors.surface, borderRadius: 12 },
-  reasonTitle: { color: theme.colors.text, fontWeight: '700' },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    content: { ...layout.content, paddingTop: 24, gap: 10 },
+    header: { gap: 14, marginBottom: 16 },
+    title: { fontSize: 28, color: colors.text, fontWeight: '700' },
+    filters: { gap: 8 },
+    modal: {
+      padding: 24,
+      paddingTop: 48,
+      backgroundColor: colors.background,
+    },
+    preview: { width: '100%', height: 400, justifyContent: 'center' },
+    thumbnail: { flex: 1, justifyContent: 'center' },
+    selected: {
+      borderWidth: 2,
+      borderColor: colors.selectionBorder,
+      borderRadius: 22,
+    },
+    tile: {
+      flex: 1,
+      maxWidth: '50%',
+      aspectRatio: 0.87,
+      padding: 2,
+      borderWidth: 2,
+      borderColor: 'transparent',
+      borderRadius: 22,
+      justifyContent: 'center',
+    },
+    image: { width: '100%', height: '100%', borderRadius: 18 },
+    caption: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      padding: 12,
+      paddingTop: 22,
+      backgroundColor: 'rgba(0,0,0,0.22)',
+    },
+    selectionTarget: {
+      position: 'absolute',
+      top: 2,
+      right: 2,
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    selectionCircle: {
+      width: 25,
+      height: 25,
+      borderRadius: 13,
+      borderWidth: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    placeholder: { color: colors.muted, textAlign: 'center', fontSize: 12 },
+    reasons: {
+      gap: 4,
+      padding: 12,
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+    },
+    reasonTitle: { color: colors.text, fontWeight: '700' },
+  });

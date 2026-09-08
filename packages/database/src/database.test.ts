@@ -38,6 +38,49 @@ beforeEach(async () => {
 });
 afterEach(() => sqlite.close());
 
+it('estimates only excess exact copies, retaining favorites and one keeper', async () => {
+  for (const [id, favorite, hash] of [
+    ['a', 0, 'same'],
+    ['b', 0, 'same'],
+    ['c', 1, 'protected'],
+    ['d', 1, 'protected'],
+    ['e', 0, 'protected'],
+    ['f', 0, 'unique'],
+  ] as const) {
+    await photo(id, favorite, 100, 1000);
+    await analysis(id, '');
+    await db.runAsync(
+      'UPDATE photo_analysis SET content_hash=? WHERE photo_id=?',
+      hash,
+      id,
+    );
+  }
+  expect(await repository.getInsights()).toMatchObject({
+    total: 6,
+    duplicateCopies: 2,
+    duplicateBytes: 2000,
+  });
+  await db.runAsync('UPDATE photos SET modified_at=200 WHERE id=?', 'b');
+  expect(await repository.getInsights()).toMatchObject({
+    pending: 1,
+    duplicateCopies: 1,
+    duplicateBytes: 1000,
+  });
+});
+it('does not invent savings for unknown sizes or visual matches', async () => {
+  await photo('a');
+  await photo('b');
+  await analysis('a', '');
+  await analysis('b', '');
+  await db.runAsync('UPDATE photos SET file_size=NULL');
+  await db.runAsync("UPDATE photo_analysis SET perceptual_hash='visual'");
+  expect(await repository.getInsights()).toMatchObject({
+    unknownSizes: 2,
+    duplicateBytes: 0,
+    duplicateCopies: 0,
+  });
+});
+
 async function photo(id: string, favorite = 0, createdAt = 100, size = 1000) {
   await db.runAsync(
     "INSERT INTO photos(id,platform_asset_id,media_type,created_at,width,height,file_size,favorite,indexed_at) VALUES(?,?,'photo',?,100,100,?,?,100)",
@@ -60,7 +103,7 @@ it('migrates idempotently and preserves data', async () => {
   await migrate(db);
   expect((await repository.getSummary()).photos).toBe(1);
   expect(sqlite.prepare('PRAGMA user_version').get()).toEqual(
-      expect.objectContaining({ user_version: 2 }),
+    expect.objectContaining({ user_version: 2 }),
   );
 });
 it('paginates tied timestamps without duplicates and excludes favorites', async () => {
@@ -237,18 +280,28 @@ it('removes trashed assets from the local index and records cleanup history', as
 });
 it('reconciles assets removed from the device after a completed scan', async () => {
   await photo('old');
-  await repository.upsertAssets([
-    {
-      id: 'new',
-      mediaType: 'photo',
-      createdAt: 100,
-      width: 100,
-      height: 100,
-    },
-  ], 200);
+  await repository.upsertAssets(
+    [
+      {
+        id: 'new',
+        mediaType: 'photo',
+        createdAt: 100,
+        width: 100,
+        height: 100,
+      },
+    ],
+    200,
+  );
   await repository.removeAssetsNotIndexedSince(200);
   expect((await repository.getSummary()).photos).toBe(1);
-  expect((await repository.query(queryPlanSchema.parse({ exclusions: { favorites: false } }), { limit: 10 })).assets[0]?.id).toBe('new');
+  expect(
+    (
+      await repository.query(
+        queryPlanSchema.parse({ exclusions: { favorites: false } }),
+        { limit: 10 },
+      )
+    ).assets[0]?.id,
+  ).toBe('new');
 });
 it('rejects unsupported exclusions instead of silently ignoring protection', async () => {
   await expect(

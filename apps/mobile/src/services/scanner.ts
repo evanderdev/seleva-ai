@@ -9,6 +9,8 @@ import {
 import type { ScanJob } from '@seleva/core';
 
 export interface ScanCallbacks {
+  metadataOnly?: boolean;
+  onCommitted?: () => void;
   onProgress?: (job: ScanJob) => void;
 }
 
@@ -28,6 +30,7 @@ export async function runLibraryScan(
     existing ?? (await repository.createScanJob(newScanId(), Date.now()));
   if (job.status === 'completed') return job;
   const indexingAt = Date.now();
+  callbacks.onProgress?.({ ...job, status: 'running' });
 
   let writeQueue = Promise.resolve();
   let writeError: unknown;
@@ -53,6 +56,8 @@ export async function runLibraryScan(
               status: 'running',
               checkpoint: batch.cursor,
             });
+            callbacks.onCommitted?.();
+            await photoScanner.acknowledgeBatch(job.id);
           })
           .catch((error: unknown) => {
             writeError = error;
@@ -70,6 +75,7 @@ export async function runLibraryScan(
           latestCheckpoint = progress.cursor ?? undefined;
           callbacks.onProgress?.({
             ...job,
+            status: 'running',
             processed: progress.processed,
             total: progress.total,
             updatedAt: Date.now(),
@@ -158,19 +164,22 @@ export async function runLibraryScan(
         writeError = error;
       }
     }),
-  ].filter((subscription): subscription is { remove(): void } => Boolean(subscription));
+  ].filter((subscription): subscription is { remove(): void } =>
+    Boolean(subscription),
+  );
 
   try {
     const result = await photoScanner.startScan(
       job.id,
       { batchSize: 100, incremental: true },
-      job.checkpoint,
+      undefined, // Restart native enumeration: iOS snapshots do not survive process death.
+      callbacks.metadataOnly,
     );
     await writeQueue;
     if (writeError) throw writeError;
     if (terminal === 'completed') {
       await repository.removeAssetsNotIndexedSince(indexingAt);
-      await repository.rebuildClusters();
+      if (!callbacks.metadataOnly) await repository.rebuildClusters();
     }
     if (!result.ok && terminal === undefined) {
       await repository.updateScanJob(job.id, {
@@ -181,6 +190,14 @@ export async function runLibraryScan(
         error: result.error,
       });
     }
+  } catch {
+    await repository.updateScanJob(job.id, {
+      processed: latestProcessed,
+      total: latestTotal,
+      status: 'failed',
+      checkpoint: latestCheckpoint ?? null,
+      error: 'UNKNOWN',
+    });
   } finally {
     subscriptions.forEach((subscription) => subscription.remove());
   }

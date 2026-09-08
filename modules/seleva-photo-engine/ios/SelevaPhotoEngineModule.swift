@@ -6,6 +6,7 @@ public class SelevaPhotoEngineModule: Module {
   private let libraryQueue = DispatchQueue(label: "seleva.library", qos: .userInitiated)
   private let scanQueue = DispatchQueue(label: "seleva.scan", qos: .utility)
   private let scanLock = NSLock()
+  private var scanAcks: [String: DispatchSemaphore] = [:]
   private var scanStops: [String: String] = [:]
   private func libraryOperation(_ promise: Promise, operation: () throws -> Any) {
     let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
@@ -26,28 +27,14 @@ public class SelevaPhotoEngineModule: Module {
     }
   }
 
-  public func definition() -> ModuleDefinition {
-    Name("SelevaPhotoEngine")
-    Events("scanBatch", "scanProgress", "scanCompleted", "scanFailed", "scanPaused", "scanCancelled")
-    OnDestroy { self.library.close() }
-    AsyncFunction("queryAssets") { (limit: Int, cursor: String?, category: String, before: Double?, promise: Promise) in
-      self.libraryOperation(promise) { try self.library.listAssets(limit: limit, cursor: cursor, category: category, before: before) }
-    }.runOnQueue(libraryQueue)
-    AsyncFunction("listAssets") { (limit: Int, cursor: String?, promise: Promise) in
-      self.libraryOperation(promise) { try self.library.listAssets(limit: limit, cursor: cursor) }
-    }.runOnQueue(libraryQueue)
-    AsyncFunction("getThumbnail") { (id: String, size: Int, promise: Promise) in
-      self.libraryOperation(promise) { try self.library.thumbnail(id: id, size: size) }
-    }.runOnQueue(libraryQueue)
-    AsyncFunction("trashAssets") { (ids: [String], promise: Promise) in
-      self.libraryOperation(promise) { try self.library.trashAssets(ids: ids) }
-    }.runOnQueue(libraryQueue)
-
-    AsyncFunction("startScan") { (jobId: String, batchSize: Int, cursor: String?, promise: Promise) in
+  private func scan(jobId: String, batchSize: Int, cursor: String?, metadataOnly: Bool, promise: Promise) {
       let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
       guard status == .authorized || status == .limited else { promise.reject("PERMISSION_DENIED", "Photo access required"); return }
       guard !jobId.isEmpty && (1...200).contains(batchSize) else { promise.reject("INVALID_SCAN", "Invalid scan request"); return }
       self.scanLock.lock(); self.scanStops[jobId] = ""; self.scanLock.unlock()
+      let ack = DispatchSemaphore(value: 0)
+      self.scanLock.lock(); self.scanAcks[jobId] = ack; self.scanLock.unlock()
+      defer { self.scanLock.lock(); self.scanAcks.removeValue(forKey: jobId); self.scanLock.unlock() }
       do {
         let total = self.library.countAssets()
         var processed = 0
@@ -56,11 +43,12 @@ public class SelevaPhotoEngineModule: Module {
           let page = try self.library.listAssets(limit: batchSize, cursor: nextCursor)
           let assets = page["assets"] as? [[String: Any]] ?? []
           let pageCursor = page["nextCursor"] as? String
-          let analyses = self.library.analyzeAssets(assets)
+          let analyses: [[String: Any]] = metadataOnly ? [] : self.library.analyzeAssets(assets)
           processed += assets.count
           let cursorValue: Any = pageCursor ?? NSNull()
           self.sendEvent("scanBatch", ["jobId": jobId, "assets": assets, "analyses": analyses, "processed": processed, "total": total, "cursor": cursorValue])
           self.sendEvent("scanProgress", ["jobId": jobId, "processed": processed, "total": total, "progress": total == 0 ? 1.0 : Double(processed) / Double(total), "cursor": cursorValue])
+          guard ack.wait(timeout: .now() + 60) == .success else { throw NSError(domain: "INDEX_WRITE_TIMEOUT", code: 1) }
           nextCursor = pageCursor
           self.scanLock.lock(); let requested = self.scanStops[jobId]; self.scanLock.unlock()
           if requested == "paused" {
@@ -85,7 +73,35 @@ public class SelevaPhotoEngineModule: Module {
         promise.reject("UNKNOWN", "Library scan failed")
       }
       self.scanLock.lock(); self.scanStops.removeValue(forKey: jobId); self.scanLock.unlock()
+  }
+
+  public func definition() -> ModuleDefinition {
+    Name("SelevaPhotoEngine")
+    Events("scanBatch", "scanProgress", "scanCompleted", "scanFailed", "scanPaused", "scanCancelled")
+    OnDestroy { self.library.close() }
+    AsyncFunction("queryAssets") { (limit: Int, cursor: String?, category: String, before: Double?, promise: Promise) in
+      self.libraryOperation(promise) { try self.library.listAssets(limit: limit, cursor: cursor, category: category, before: before) }
+    }.runOnQueue(libraryQueue)
+    AsyncFunction("listAssets") { (limit: Int, cursor: String?, promise: Promise) in
+      self.libraryOperation(promise) { try self.library.listAssets(limit: limit, cursor: cursor) }
+    }.runOnQueue(libraryQueue)
+    AsyncFunction("getThumbnail") { (id: String, size: Int, promise: Promise) in
+      self.libraryOperation(promise) { try self.library.thumbnail(id: id, size: size) }
+    }.runOnQueue(libraryQueue)
+    AsyncFunction("trashAssets") { (ids: [String], promise: Promise) in
+      self.libraryOperation(promise) { try self.library.trashAssets(ids: ids) }
+    }.runOnQueue(libraryQueue)
+
+    AsyncFunction("startScan") { (jobId: String, batchSize: Int, cursor: String?, promise: Promise) in
+      self.scan(jobId: jobId, batchSize: batchSize, cursor: cursor, metadataOnly: false, promise: promise)
     }.runOnQueue(scanQueue)
+    AsyncFunction("startMetadataScan") { (jobId: String, batchSize: Int, cursor: String?, promise: Promise) in
+      self.scan(jobId: jobId, batchSize: batchSize, cursor: cursor, metadataOnly: true, promise: promise)
+    }.runOnQueue(scanQueue)
+
+    AsyncFunction("acknowledgeScanBatch") { (jobId: String) in
+      self.scanLock.lock(); let ack = self.scanAcks[jobId]; self.scanLock.unlock(); ack?.signal()
+    }
 
     AsyncFunction("stopScan") { (jobId: String, mode: String, promise: Promise) in
       guard mode == "paused" || mode == "cancelled" else { promise.reject("INVALID_SCAN", "Invalid stop mode"); return }

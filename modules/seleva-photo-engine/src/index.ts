@@ -19,6 +19,12 @@ export interface NativeLibraryModule {
     batchSize: number,
     cursor: string | null,
   ): Promise<unknown>;
+  acknowledgeScanBatch?(jobId: string): Promise<unknown>;
+  startMetadataScan?(
+    jobId: string,
+    batchSize: number,
+    cursor: string | null,
+  ): Promise<unknown>;
   stopScan?(jobId: string, mode: 'paused' | 'cancelled'): Promise<unknown>;
   addListener?(
     eventName:
@@ -37,13 +43,18 @@ export function getNativeLibraryModule(): NativeLibraryModule | null {
 
 export function getNativeScannerModule(): {
   startScan: NonNullable<NativeLibraryModule['startScan']>;
+  startMetadataScan?: NativeLibraryModule['startMetadataScan'];
+  acknowledgeScanBatch?: NativeLibraryModule['acknowledgeScanBatch'];
   stopScan: NonNullable<NativeLibraryModule['stopScan']>;
   addListener: NonNullable<NativeLibraryModule['addListener']>;
 } | null {
   const native = getNativeLibraryModule();
-  if (!native?.startScan || !native.stopScan || !native.addListener) return null;
+  if (!native?.startScan || !native.stopScan || !native.addListener)
+    return null;
   return {
     startScan: native.startScan.bind(native),
+    acknowledgeScanBatch: native.acknowledgeScanBatch?.bind(native),
+    startMetadataScan: native.startMetadataScan?.bind(native),
     stopScan: native.stopScan.bind(native),
     addListener: native.addListener.bind(native),
   };

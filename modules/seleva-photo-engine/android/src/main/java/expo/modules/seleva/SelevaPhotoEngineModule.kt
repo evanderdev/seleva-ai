@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 class SelevaPhotoEngineModule : Module() {
   private var libraryService: PhotoLibraryService? = null
+  private val scanAcks = ConcurrentHashMap<String, java.util.concurrent.Semaphore>()
   private val scanStops = ConcurrentHashMap<String, AtomicReference<String?>>()
   @Synchronized private fun service(context: Context): PhotoLibraryService =
     libraryService ?: PhotoLibraryService(context).also { libraryService = it }
@@ -46,38 +47,24 @@ class SelevaPhotoEngineModule : Module() {
     return if (requested) "denied" else "not-determined"
   }
 
-  override fun definition() = ModuleDefinition {
-    Name("SelevaPhotoEngine")
-    Events("scanBatch", "scanProgress", "scanCompleted", "scanFailed", "scanPaused", "scanCancelled")
-    AsyncFunction("queryAssets") { limit: Int, cursor: String?, category: String, before: Double?, promise: Promise ->
-      libraryOperation(promise) { it.listAssets(limit, cursor, category, before) }
-    }
-    AsyncFunction("listAssets") { limit: Int, cursor: String?, promise: Promise ->
-      libraryOperation(promise) { it.listAssets(limit, cursor) }
-    }
-    AsyncFunction("getThumbnail") { id: String, size: Int, promise: Promise ->
-      libraryOperation(promise) { it.thumbnail(id, size) }
-    }
-    AsyncFunction("trashAssets") { ids: List<String>, promise: Promise ->
-      libraryOperation(promise) { it.trashAssets(ids) }
-    }
-
-    AsyncFunction("startScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise ->
+  private fun scan(jobId: String, batchSize: Int, cursor: String?, metadataOnly: Boolean, promise: Promise) {
       val context = appContext.reactContext
       if (context == null) {
         promise.reject("DEVICE_UNSUPPORTED", "Context unavailable", null)
-        return@AsyncFunction
+        return
       }
       if (jobId.isBlank() || batchSize !in 1..200) {
         promise.reject("INVALID_SCAN", "Invalid scan request", null)
-        return@AsyncFunction
+        return
       }
       if (permission(context) !in listOf("authorized", "limited")) {
         promise.reject("PERMISSION_DENIED", "Photo access required", null)
-        return@AsyncFunction
+        return
       }
       val stop = AtomicReference<String?>(null)
       scanStops[jobId] = stop
+      val ack = java.util.concurrent.Semaphore(0)
+      scanAcks[jobId] = ack
       try {
         val service = service(context)
         val total = service.countAssets()
@@ -88,7 +75,7 @@ class SelevaPhotoEngineModule : Module() {
           @Suppress("UNCHECKED_CAST")
           val assets = page["assets"] as? List<Map<String, Any>> ?: emptyList()
           val pageCursor = page["nextCursor"] as? String
-          val analyses = service.analyzeAssets(assets)
+          val analyses = if (metadataOnly) emptyList<Map<String, Any>>() else service.analyzeAssets(assets)
           processed += assets.size
           sendEvent("scanBatch", mapOf(
             "jobId" to jobId,
@@ -105,17 +92,18 @@ class SelevaPhotoEngineModule : Module() {
             "progress" to if (total == 0) 1.0 else processed.toDouble() / total.toDouble(),
             "cursor" to pageCursor,
           ))
+          if (!ack.tryAcquire(60, java.util.concurrent.TimeUnit.SECONDS)) throw IllegalStateException("INDEX_WRITE_TIMEOUT")
           nextCursor = pageCursor
           val requested = stop.get()
           if (requested == "paused") {
             sendEvent("scanPaused", mapOf("jobId" to jobId, "processed" to processed, "total" to total, "cursor" to nextCursor))
             promise.resolve(mapOf("jobId" to jobId, "status" to "paused", "cursor" to nextCursor))
-            return@AsyncFunction
+            return
           }
           if (requested == "cancelled") {
             sendEvent("scanCancelled", mapOf("jobId" to jobId, "processed" to processed, "total" to total, "cursor" to nextCursor))
             promise.resolve(mapOf("jobId" to jobId, "status" to "cancelled", "cursor" to nextCursor))
-            return@AsyncFunction
+            return
           }
           if (pageCursor == null || assets.isEmpty()) break
         }
@@ -129,8 +117,30 @@ class SelevaPhotoEngineModule : Module() {
         promise.reject("UNKNOWN", "Library scan failed", null)
       } finally {
         scanStops.remove(jobId)
+        scanAcks.remove(jobId)
       }
+  }
+
+  override fun definition() = ModuleDefinition {
+    Name("SelevaPhotoEngine")
+    Events("scanBatch", "scanProgress", "scanCompleted", "scanFailed", "scanPaused", "scanCancelled")
+    AsyncFunction("queryAssets") { limit: Int, cursor: String?, category: String, before: Double?, promise: Promise ->
+      libraryOperation(promise) { it.listAssets(limit, cursor, category, before) }
     }
+    AsyncFunction("listAssets") { limit: Int, cursor: String?, promise: Promise ->
+      libraryOperation(promise) { it.listAssets(limit, cursor) }
+    }
+    AsyncFunction("getThumbnail") { id: String, size: Int, promise: Promise ->
+      libraryOperation(promise) { it.thumbnail(id, size) }
+    }
+    AsyncFunction("trashAssets") { ids: List<String>, promise: Promise ->
+      libraryOperation(promise) { it.trashAssets(ids) }
+    }
+
+    AsyncFunction("startScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, false, promise) }
+    AsyncFunction("startMetadataScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, true, promise) }
+
+    AsyncFunction("acknowledgeScanBatch") { jobId: String -> scanAcks[jobId]?.release(); Unit }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("stopScan") { jobId: String, mode: String, promise: Promise ->
       if (mode != "paused" && mode != "cancelled") {
@@ -139,7 +149,7 @@ class SelevaPhotoEngineModule : Module() {
       }
       scanStops[jobId]?.set(mode)
       promise.resolve(mapOf("jobId" to jobId, "mode" to mode))
-    }
+    }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("getCapabilities") { promise: Promise ->
       val context = appContext.reactContext

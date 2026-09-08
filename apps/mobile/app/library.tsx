@@ -2,6 +2,7 @@ import { LibraryScreen } from '../src/screens/LibraryScreen';
 import { useLocalSearchParams } from 'expo-router';
 export default function Library() {
   const params = useLocalSearchParams<{
+    prompt?: string;
     category?: string;
     before?: string;
     minFileSize?: string;
@@ -23,13 +24,16 @@ export default function Library() {
     ? (params.category as (typeof categories)[number])
     : 'all';
   const before = params.before ? Number(params.before) : undefined;
-  const minFileSize = params.minFileSize ? Number(params.minFileSize) : undefined;
+  const minFileSize = params.minFileSize
+    ? Number(params.minFileSize)
+    : undefined;
   const minBlur = params.minBlur ? Number(params.minBlur) : undefined;
   const ocrTerms = params.ocrTerms
     ? params.ocrTerms.split(',').filter((term) => term.length >= 1)
     : undefined;
   return (
     <LibraryScreen
+      initialPrompt={params.prompt}
       initialCategory={category}
       initialBefore={Number.isFinite(before) ? before : undefined}
       initialMinFileSize={

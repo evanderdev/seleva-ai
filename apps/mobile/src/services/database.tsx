@@ -9,7 +9,7 @@ import { openDatabaseAsync } from 'expo-sqlite';
 import { migrate, PhotoRepository } from '@seleva/database';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Button, theme } from '@seleva/ui';
+import { Button, theme, useTheme } from '@seleva/ui';
 import { usePreferences } from '../stores/preferences';
 import { locales, type Locale } from '../i18n';
 
@@ -31,6 +31,7 @@ function initialize() {
 }
 export function DatabaseProvider({ children }: PropsWithChildren) {
   const { t } = useTranslation();
+  const colors = useTheme();
   const [repository, setRepository] = useState<PhotoRepository>();
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -58,6 +59,7 @@ export function DatabaseProvider({ children }: PropsWithChildren) {
     return (
       <View
         style={{
+          backgroundColor: colors.background,
           flex: 1,
           padding: theme.spacing.lg,
           justifyContent: 'center',
@@ -66,7 +68,7 @@ export function DatabaseProvider({ children }: PropsWithChildren) {
       >
         {failed ? (
           <>
-            <Text>{t('databaseError')}</Text>
+            <Text style={{ color: colors.text }}>{t('databaseError')}</Text>
             <Button
               label={t('retry')}
               onPress={() => {
@@ -78,7 +80,7 @@ export function DatabaseProvider({ children }: PropsWithChildren) {
         ) : (
           <>
             <ActivityIndicator />
-            <Text>{t('loading')}</Text>
+            <Text style={{ color: colors.text }}>{t('loading')}</Text>
           </>
         )}
       </View>

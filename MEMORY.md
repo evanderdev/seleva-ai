@@ -27,6 +27,10 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - O prompt usa somente regras locais neste incremento: screenshots/prints, vídeos, favoritos, fotos e termos de idade. A rota de resultados mantém filtros e permite voltar para refazer a consulta.
 - Preferência `themeMode` (light/dark) é persistida junto ao idioma; o Home já aplica o fundo escuro e os próximos componentes devem consumir a mesma preferência.
 
+- Tema de refer?ncia centralizado em `packages/ui`: `ThemeProvider`/`useTheme`, paletas claras/escuras, bot?es e ?cones nativos. Novos componentes devem consumir esses tokens, sem cores de texto fixas do tema claro.
+- Home e painel de edi??o dos resultados compartilham `features/search/prompt.ts`, validado com Zod. Atalhos usam filtros expl?citos; palavras de comando n?o viram termos OCR.
+- Resultados mostram contagem e sele??o da p?gina (at? 60 itens), sem apresentar essa contagem como total global. Pr?via e confirma??o do SO continuam obrigat?rias para lixeira.
+
 ## Estado Atual das Features
 
 - [x] Etapas 1–4: workspace, Expo Router, UI foundation, tema, i18n e contratos de domínio.
@@ -45,6 +49,9 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - [ ] Etapa 10, completa: reconciliação de assets removidos foi adicionada ao fim de scans completos; ainda falta indexação incremental por data de modificação e WorkManager/background execution.
 - [x] Etapas 11–14, base local: blur/brilho, pHash, hash de conteúdo, OCR nativo e clusters são persistidos em lotes; validação iOS ainda pendente.
 - [ ] Etapas 15–21: ranking de candidatos, melhor foto, background completo, regras avançadas de intenção e polish.
+
+- [x] Tema das refer?ncias aplicado ? Home, resultados, painel inferior de busca e configura??es; prefer?ncias claras/escuras em todas essas telas, tradu??es en/pt-BR/es e funcionalidades locais conectadas.
+- [ ] Compara??o visual final do tema no aparelho desbloqueado e no iOS.
 
 ## Contratos e banco
 

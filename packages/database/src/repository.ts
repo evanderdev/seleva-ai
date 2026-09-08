@@ -39,7 +39,57 @@ interface ScanJobRow {
 export class PhotoRepository {
   constructor(private readonly db: SqlDatabase) {}
 
-  async upsertAssets(assets: PhotoAsset[], indexedAt = Date.now()): Promise<void> {
+  async getInsights() {
+    const [row] = await this.db.getAllAsync<{
+      total: number;
+      knownBytes: number;
+      unknownSizes: number;
+      pending: number;
+      screenshots: number;
+      blurry: number;
+      largeVideos: number;
+      largeVideoBytes: number;
+    }>(`SELECT COUNT(*) AS total, COALESCE(SUM(p.file_size),0) AS knownBytes,
+      COALESCE(SUM(p.file_size IS NULL),0) AS unknownSizes,
+      COALESCE(SUM(a.photo_id IS NULL OR a.analyzed_at < COALESCE(p.modified_at,0)),0) AS pending,
+      COALESCE(SUM(a.is_screenshot = 1),0) AS screenshots,
+      COALESCE(SUM(a.blur_score >= 0.55),0) AS blurry,
+      COALESCE(SUM(p.media_type = 'video' AND p.file_size >= 524288000),0) AS largeVideos,
+      COALESCE(SUM(CASE WHEN p.media_type = 'video' AND p.file_size >= 524288000 THEN p.file_size ELSE 0 END),0) AS largeVideoBytes
+      FROM photos p LEFT JOIN photo_analysis a ON a.photo_id = p.id`);
+    // One keeper per exact-content group, with every favorite protected. No visual
+    // similarity or blur heuristic contributes to the savings estimate.
+    const [duplicates] = await this.db.getAllAsync<{
+      duplicateBytes: number;
+      duplicateCopies: number;
+    }>(`
+      WITH ranked AS (
+        SELECT p.file_size, p.favorite,
+          ROW_NUMBER() OVER (PARTITION BY a.content_hash ORDER BY p.favorite DESC, p.id) AS position
+        FROM photos p JOIN photo_analysis a ON a.photo_id = p.id
+        WHERE a.content_hash IS NOT NULL AND a.content_hash != ''
+          AND a.analyzed_at >= COALESCE(p.modified_at,0)
+      ) SELECT COALESCE(SUM(file_size),0) AS duplicateBytes, COUNT(*) AS duplicateCopies
+        FROM ranked WHERE position > 1 AND favorite = 0`);
+    return {
+      ...(row ?? {
+        total: 0,
+        knownBytes: 0,
+        unknownSizes: 0,
+        pending: 0,
+        screenshots: 0,
+        blurry: 0,
+        largeVideos: 0,
+        largeVideoBytes: 0,
+      }),
+      ...(duplicates ?? { duplicateBytes: 0, duplicateCopies: 0 }),
+    };
+  }
+
+  async upsertAssets(
+    assets: PhotoAsset[],
+    indexedAt = Date.now(),
+  ): Promise<void> {
     if (assets.length === 0) return;
     await this.db.withExclusiveTransactionAsync(async (tx) => {
       for (const asset of assets) {
@@ -95,8 +145,12 @@ export class PhotoRepository {
           analysis.brightnessScore ?? null,
           analysis.faceCount ?? null,
           analysis.ocrText ?? null,
-          analysis.isScreenshot === undefined ? null : Number(analysis.isScreenshot),
-          analysis.isDocument === undefined ? null : Number(analysis.isDocument),
+          analysis.isScreenshot === undefined
+            ? null
+            : Number(analysis.isScreenshot),
+          analysis.isDocument === undefined
+            ? null
+            : Number(analysis.isDocument),
           analysis.isMeme === undefined ? null : Number(analysis.isMeme),
           analysis.perceptualHash ?? null,
           analysis.contentHash ?? null,
@@ -109,56 +163,33 @@ export class PhotoRepository {
   }
 
   async rebuildClusters(): Promise<void> {
-    const rows = await this.db.getAllAsync<{
-      photo_id: string;
-      perceptual_hash: string | null;
-      content_hash: string | null;
-    }>(
-      'SELECT photo_id, perceptual_hash, content_hash FROM photo_analysis WHERE perceptual_hash IS NOT NULL OR content_hash IS NOT NULL',
-    );
-    const groups = new Map<string, { kind: 'exact' | 'visual'; ids: string[] }>();
-    for (const row of rows) {
-      const hash = row.content_hash ?? row.perceptual_hash;
-      if (!hash) continue;
-      const kind = row.content_hash ? 'exact' : 'visual';
-      const key = `${kind}:${hash}`;
-      const group = groups.get(key) ?? { kind, ids: [] };
-      group.ids.push(row.photo_id);
-      groups.set(key, group);
-    }
     await this.db.withExclusiveTransactionAsync(async (tx) => {
       await tx.runAsync('DELETE FROM photo_cluster_members');
       await tx.runAsync('DELETE FROM photo_clusters');
-      for (const [key, group] of groups) {
-        if (group.ids.length < 2) continue;
-        const representative = group.ids[0];
-        if (!representative) continue;
-        const clusterId = `cluster-${key}`;
-        await tx.runAsync(
-          'INSERT INTO photo_clusters(id,kind,representative_id) VALUES(?,?,?)',
-          clusterId,
-          group.kind,
-          representative,
-        );
-        for (const photoId of group.ids)
-          await tx.runAsync(
-            'INSERT INTO photo_cluster_members(cluster_id,photo_id) VALUES(?,?)',
-            clusterId,
-            photoId,
-          );
-      }
+      await tx.runAsync(`INSERT INTO photo_clusters(id,kind,representative_id)
+        SELECT 'cluster-' || CASE WHEN content_hash IS NOT NULL THEN 'exact:' ELSE 'visual:' END || COALESCE(content_hash,perceptual_hash),
+          CASE WHEN content_hash IS NOT NULL THEN 'exact' ELSE 'visual' END, MIN(photo_id)
+        FROM photo_analysis WHERE COALESCE(content_hash,perceptual_hash) IS NOT NULL
+        GROUP BY CASE WHEN content_hash IS NOT NULL THEN 'exact' ELSE 'visual' END, COALESCE(content_hash,perceptual_hash) HAVING COUNT(*) > 1`);
+      await tx.runAsync(`INSERT INTO photo_cluster_members(cluster_id,photo_id)
+        SELECT c.id,a.photo_id FROM photo_analysis a JOIN photo_clusters c ON c.id =
+          'cluster-' || CASE WHEN a.content_hash IS NOT NULL THEN 'exact:' ELSE 'visual:' END || COALESCE(a.content_hash,a.perceptual_hash)`);
     });
   }
 
   async removeAssets(ids: string[]): Promise<void> {
     if (ids.length === 0) return;
     await this.db.withExclusiveTransactionAsync(async (tx) => {
-      for (const id of ids) await tx.runAsync('DELETE FROM photos WHERE id = ?', id);
+      for (const id of ids)
+        await tx.runAsync('DELETE FROM photos WHERE id = ?', id);
     });
   }
 
   async removeAssetsNotIndexedSince(indexedAt: number): Promise<void> {
-    await this.db.runAsync('DELETE FROM photos WHERE indexed_at < ?', indexedAt);
+    await this.db.runAsync(
+      'DELETE FROM photos WHERE indexed_at < ?',
+      indexedAt,
+    );
   }
 
   async recordCleanup(
@@ -309,9 +340,15 @@ export class PhotoRepository {
         reasons.push('screenshot');
       if (filters?.duplicate === true || filters?.similar === true)
         reasons.push(filters.duplicate === true ? 'duplicate' : 'similar');
-      if (filters?.minBlur !== undefined && (row?.blur_score ?? 0) >= filters.minBlur)
+      if (
+        filters?.minBlur !== undefined &&
+        (row?.blur_score ?? 0) >= filters.minBlur
+      )
         reasons.push('blurry');
-      if (filters?.minFileSize !== undefined && (asset.fileSize ?? 0) >= filters.minFileSize)
+      if (
+        filters?.minFileSize !== undefined &&
+        (asset.fileSize ?? 0) >= filters.minFileSize
+      )
         reasons.push('large-media');
       if (filters?.before !== undefined && asset.createdAt < filters.before)
         reasons.push('old-media');

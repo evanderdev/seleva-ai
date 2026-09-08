@@ -50,6 +50,12 @@ export interface NativeScanTransport {
     batchSize: number,
     cursor: string | null,
   ): Promise<unknown>;
+  acknowledgeScanBatch?(jobId: string): Promise<unknown>;
+  startMetadataScan?(
+    jobId: string,
+    batchSize: number,
+    cursor: string | null,
+  ): Promise<unknown>;
   stopScan(jobId: string, mode: 'paused' | 'cancelled'): Promise<unknown>;
   addListener(
     eventName: ScanEventName,
@@ -75,6 +81,9 @@ export function createPhotoScanner(native: NativeScanTransport | null) {
     return { ok: false, error: 'DEVICE_UNSUPPORTED' };
   }
   return {
+    async acknowledgeBatch(jobId: string) {
+      await native?.acknowledgeScanBatch?.(jobId);
+    },
     addListener(
       eventName: ScanEventName,
       listener: ScanEventListener,
@@ -85,17 +94,19 @@ export function createPhotoScanner(native: NativeScanTransport | null) {
       jobId: string,
       options: ScanOptions,
       cursor?: string,
+      metadataOnly = false,
     ): Promise<EngineResult<unknown>> {
-      if (!native) return unavailable();
+      if (!native || (metadataOnly && !native.startMetadataScan))
+        return unavailable();
       try {
         const request = scanOptionsSchema.parse(options);
         return {
           ok: true,
-          value: await native.startScan(
-            jobId,
-            request.batchSize,
-            cursor ?? null,
-          ),
+          value: await (
+            metadataOnly && native.startMetadataScan
+              ? native.startMetadataScan.bind(native)
+              : native.startScan.bind(native)
+          )(jobId, request.batchSize, cursor ?? null),
         };
       } catch {
         return { ok: false, error: 'UNKNOWN' };
