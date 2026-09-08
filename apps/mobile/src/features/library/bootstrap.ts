@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { PhotoPermission, ScanJob, EngineResult } from '@seleva/core';
 import type { PhotoRepository } from '@seleva/database';
 import type { ScanCallbacks } from '../../services/scanner';
@@ -21,7 +22,10 @@ export interface LibraryState {
   revision: number;
 }
 interface Dependencies {
-  repository: Pick<PhotoRepository, 'getInsights'>;
+  repository: Pick<
+    PhotoRepository,
+    'getInsights' | 'getPreference' | 'setPreference'
+  >;
   access: {
     getPermission(): Promise<EngineResult<PhotoPermission>>;
     requestPermission(): Promise<EngineResult<PhotoPermission>>;
@@ -29,6 +33,13 @@ interface Dependencies {
   scan(callbacks: ScanCallbacks): Promise<ScanJob | undefined>;
   stop(id: string): Promise<boolean>;
 }
+
+const cacheKey = 'library-metadata-v1';
+const cacheSchema = z.object({
+  completedAt: z.number().finite().nonnegative(),
+  permission: z.enum(['authorized', 'limited']),
+});
+const cacheLifetime = 6 * 60 * 60 * 1000;
 
 /** One foreground coordinator shared by every route. No asset datasets in state. */
 export function createLibraryBootstrap(deps: Dependencies) {
@@ -38,21 +49,25 @@ export function createLibraryBootstrap(deps: Dependencies) {
   let running: Promise<void> | undefined;
   let metadataDone = false;
   let completed = false;
+  let cacheLoaded = false;
+  let metadataAt = 0;
+  let forceRefresh = false;
   let requested = false;
   let refresh: Promise<void> | undefined;
-  let lastRefresh = 0;
   const publish = (next: Partial<LibraryState>) => {
     state = { ...state, ...next };
     listeners.forEach((listener) => listener());
   };
-  const updateInsights = async () => {
-    if (refresh) return refresh;
+  const updateInsights = async (force = false) => {
+    if (refresh) {
+      await refresh;
+      if (!force) return;
+    }
     refresh = deps.repository
       .getInsights()
       .then((insights) => publish({ insights, revision: state.revision + 1 }))
       .finally(() => {
         refresh = undefined;
-        lastRefresh = Date.now();
       });
     return refresh;
   };
@@ -78,6 +93,7 @@ export function createLibraryBootstrap(deps: Dependencies) {
       if (!['authorized', 'limited'].includes(permission.value)) {
         metadataDone = false;
         completed = false;
+        await deps.repository.setPreference(cacheKey, '');
         publish({
           phase: 'permission',
           insights: undefined,
@@ -93,8 +109,32 @@ export function createLibraryBootstrap(deps: Dependencies) {
         publish({ phase: 'paused' });
         return;
       }
-      if (completed) {
-        await updateInsights();
+      if (!cacheLoaded) {
+        cacheLoaded = true;
+        const raw = await deps.repository.getPreference(cacheKey);
+        let cached: z.infer<typeof cacheSchema> | undefined;
+        try {
+          cached = cacheSchema.parse(JSON.parse(raw ?? 'null'));
+        } catch {
+          /* Rebuild invalid cache metadata. */
+        }
+        if (
+          !forceRefresh &&
+          cached?.permission === permission.value &&
+          permission.value === 'authorized'
+        ) {
+          metadataAt = cached.completedAt;
+          metadataDone =
+            Date.now() >= metadataAt && Date.now() - metadataAt < cacheLifetime;
+        }
+      }
+      await updateInsights(true);
+      if (Date.now() - metadataAt >= cacheLifetime) {
+        metadataDone = false;
+        completed = false;
+      }
+      if (completed && metadataDone) {
+        publish({ phase: 'ready' });
         return;
       }
       for (const metadataOnly of metadataDone ? [false] : [true, false]) {
@@ -107,6 +147,7 @@ export function createLibraryBootstrap(deps: Dependencies) {
           (await deps.repository.getInsights()).pending === 0
         )
           break;
+        if (metadataOnly) await deps.repository.setPreference(cacheKey, '');
         publish({
           phase: metadataOnly ? 'metadata' : 'analysis',
           job: undefined,
@@ -119,11 +160,12 @@ export function createLibraryBootstrap(deps: Dependencies) {
             if (!active) void deps.stop(job.id);
           },
           onCommitted: () => {
-            if (Date.now() - lastRefresh > 1200)
-              void updateInsights().catch(() => publish({ error: 'UNKNOWN' }));
+            void updateInsights(true).catch(() =>
+              publish({ error: 'UNKNOWN' }),
+            );
           },
         });
-        await updateInsights();
+        await updateInsights(true);
         publish({ job });
         if (job?.status !== 'completed') {
           publish({
@@ -132,10 +174,21 @@ export function createLibraryBootstrap(deps: Dependencies) {
           });
           return;
         }
-        if (metadataOnly) metadataDone = true;
+        if (metadataOnly) {
+          metadataDone = true;
+          forceRefresh = false;
+          metadataAt = Date.now();
+          await deps.repository.setPreference(
+            cacheKey,
+            JSON.stringify({
+              completedAt: metadataAt,
+              permission: permission.value,
+            }),
+          );
+        }
       }
       completed = true;
-      await updateInsights();
+      await updateInsights(true);
       publish({ phase: 'ready' });
     } catch {
       publish({ phase: 'error', error: 'UNKNOWN' });
@@ -164,6 +217,8 @@ export function createLibraryBootstrap(deps: Dependencies) {
       return start();
     },
     refresh() {
+      if (running) return running;
+      forceRefresh = true;
       metadataDone = false;
       completed = false;
       return start();

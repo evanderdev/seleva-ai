@@ -7,6 +7,7 @@ public class SelevaPhotoEngineModule: Module {
   private let scanQueue = DispatchQueue(label: "seleva.scan", qos: .utility)
   private let scanLock = NSLock()
   private var scanAcks: [String: DispatchSemaphore] = [:]
+  private var scanSelections: [String: Set<String>] = [:]
   private var scanStops: [String: String] = [:]
   private func libraryOperation(_ promise: Promise, operation: () throws -> Any) {
     let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
@@ -27,14 +28,14 @@ public class SelevaPhotoEngineModule: Module {
     }
   }
 
-  private func scan(jobId: String, batchSize: Int, cursor: String?, metadataOnly: Bool, promise: Promise) {
+  private func scan(jobId: String, batchSize: Int, cursor: String?, metadataOnly: Bool, promise: Promise, incremental: Bool = false) {
       let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
       guard status == .authorized || status == .limited else { promise.reject("PERMISSION_DENIED", "Photo access required"); return }
       guard !jobId.isEmpty && (1...200).contains(batchSize) else { promise.reject("INVALID_SCAN", "Invalid scan request"); return }
       self.scanLock.lock(); self.scanStops[jobId] = ""; self.scanLock.unlock()
       let ack = DispatchSemaphore(value: 0)
       self.scanLock.lock(); self.scanAcks[jobId] = ack; self.scanLock.unlock()
-      defer { self.scanLock.lock(); self.scanAcks.removeValue(forKey: jobId); self.scanLock.unlock() }
+      defer { self.scanLock.lock(); self.scanAcks.removeValue(forKey: jobId); self.scanSelections.removeValue(forKey: jobId); self.scanLock.unlock() }
       do {
         let total = self.library.countAssets()
         var processed = 0
@@ -43,7 +44,18 @@ public class SelevaPhotoEngineModule: Module {
           let page = try self.library.listAssets(limit: batchSize, cursor: nextCursor)
           let assets = page["assets"] as? [[String: Any]] ?? []
           let pageCursor = page["nextCursor"] as? String
-          let analyses: [[String: Any]] = metadataOnly ? [] : self.library.analyzeAssets(assets)
+          var selected = assets
+          if incremental {
+            self.sendEvent("scanBatch", ["jobId": jobId, "assets": assets, "analyses": [], "requiresAnalysis": true,
+              "processed": processed, "total": total, "cursor": nextCursor as Any? ?? NSNull()])
+            guard ack.wait(timeout: .now() + 60) == .success else { throw NSError(domain: "INDEX_WRITE_TIMEOUT", code: 1) }
+            self.scanLock.lock()
+            let ids = self.scanSelections.removeValue(forKey: jobId) ?? []
+            let stopped = self.scanStops[jobId] != ""
+            self.scanLock.unlock()
+            selected = stopped ? [] : assets.filter { ids.contains($0["id"] as? String ?? "") }
+          }
+          let analyses: [[String: Any]] = metadataOnly ? [] : self.library.analyzeAssets(selected)
           processed += assets.count
           let cursorValue: Any = pageCursor ?? NSNull()
           self.sendEvent("scanBatch", ["jobId": jobId, "assets": assets, "analyses": analyses, "processed": processed, "total": total, "cursor": cursorValue])
@@ -95,6 +107,18 @@ public class SelevaPhotoEngineModule: Module {
     AsyncFunction("startScan") { (jobId: String, batchSize: Int, cursor: String?, promise: Promise) in
       self.scan(jobId: jobId, batchSize: batchSize, cursor: cursor, metadataOnly: false, promise: promise)
     }.runOnQueue(scanQueue)
+    AsyncFunction("startIncrementalScan") { (jobId: String, batchSize: Int, cursor: String?, promise: Promise) in
+      self.scan(jobId: jobId, batchSize: batchSize, cursor: cursor, metadataOnly: false, promise: promise, incremental: true)
+    }.runOnQueue(scanQueue)
+    AsyncFunction("selectScanAssets") { (jobId: String, ids: [String], promise: Promise) in
+      guard ids.count <= 200 && ids.allSatisfy({ !$0.isEmpty }) else { promise.reject("INVALID_SCAN", "Invalid batch"); return }
+      self.scanLock.lock()
+      let ack = self.scanAcks[jobId]
+      if ack != nil { self.scanSelections[jobId] = Set(ids) }
+      self.scanLock.unlock()
+      ack?.signal()
+      promise.resolve(nil)
+    }
     AsyncFunction("startMetadataScan") { (jobId: String, batchSize: Int, cursor: String?, promise: Promise) in
       self.scan(jobId: jobId, batchSize: batchSize, cursor: cursor, metadataOnly: true, promise: promise)
     }.runOnQueue(scanQueue)

@@ -60,7 +60,7 @@ it('dispatches metadata scanning and acknowledges committed batches', async () =
 });
 
 it('validates bounded native scan batches', () => {
-  expect(parseScanBatch(batch)).toEqual(batch);
+  expect(parseScanBatch(batch)).toEqual({ ...batch, requiresAnalysis: false });
   expect(() =>
     parseScanBatch({ ...batch, assets: new Array(201).fill(batch.assets[0]) }),
   ).toThrow();
@@ -68,7 +68,10 @@ it('validates bounded native scan batches', () => {
 
 it('forwards scan start and stop requests', async () => {
   const native: NativeScanTransport = {
-    startScan: jest.fn(async () => ({ status: 'completed' })),
+    startScan: jest.fn(),
+    startIncrementalScan: jest.fn(async () => ({ status: 'completed' })),
+    selectScanAssets: jest.fn(),
+    acknowledgeScanBatch: jest.fn(),
     stopScan: jest.fn(async () => ({ mode: 'paused' })),
     addListener: jest.fn(() => ({ remove: jest.fn() })),
   };
@@ -83,6 +86,22 @@ it('forwards scan start and stop requests', async () => {
     ok: true,
     value: { mode: 'paused' },
   });
-  expect(native.startScan).toHaveBeenCalledWith('scan-1', 10, null);
+  expect(native.startIncrementalScan).toHaveBeenCalledWith('scan-1', 10, null);
   expect(native.stopScan).toHaveBeenCalledWith('scan-1', 'paused');
+});
+
+it('refuses an older native engine that would ignore the analysis cache', async () => {
+  const native: NativeScanTransport = {
+    startScan: jest.fn(),
+    acknowledgeScanBatch: jest.fn(),
+    stopScan: jest.fn(),
+    addListener: jest.fn(),
+  };
+  expect(
+    await createPhotoScanner(native).startScan('test', {
+      batchSize: 100,
+      incremental: true,
+    }),
+  ).toEqual({ ok: false, error: 'DEVICE_UNSUPPORTED' });
+  expect(native.startScan).not.toHaveBeenCalled();
 });

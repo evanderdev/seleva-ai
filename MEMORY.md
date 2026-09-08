@@ -8,6 +8,10 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 ## ⚠️ Regras Estritas
 
+- Pré-análise preserva os lotes já confirmados no SQLite. Antes de analisar um lote nativo, consultar os IDs pendentes por `modified_at`, `analysis_version` e `model_version`; nunca reanalisar itens com cache válido só porque outro item está pendente.
+- A conclusão da etapa de metadados fica em `user_preferences` (`library-metadata-v1`), com validade de seis horas e escopo de permissão. Atualização manual invalida essa conclusão, sem apagar análises. Acesso limitado exige reconciliação ao reabrir. Mudanças na galeria dentro desse intervalo exigem atualização manual; observadores incrementais persistentes continuam pendentes.
+- `startIncrementalScan` e `selectScanAssets` exigem novo Development Build. Cada lote espera a seleção de pendentes e depois a confirmação de persistência; clusters são publicados por lote em transação SQL. Versões dos algoritmos nativos e do predicado de cache devem mudar juntas.
+
 - Fotos, vídeos, OCR e metadata pessoais nunca saem do aparelho. Sem backend/IA paga/login no MVP.
 - Processamento pesado será Swift/Kotlin em batches; nunca atravessar JS/nativo por foto para indexar.
 - Nenhuma exclusão sem preview, seleção, confirmação explícita e API do SO; preferir lixeira.
@@ -33,6 +37,9 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 ## Estado Atual das Features
 
+- [x] Home sem miniaturas de galeria, com resumo de metadados, análises concluídas e pendentes; resultados salvos ficam disponíveis durante os lotes seguintes.
+- [x] Cache persistente da preparação, reutilização de análises por asset e retomada dos pendentes após reabrir. Validação: lint, typecheck, 61 testes e build Android arm64; dispositivo/iOS ainda pendentes.
+
 - [x] Abertura solicita permissão automaticamente e inicia pré-indexação nativa de metadados, seguida de análise dos itens pendentes, com progresso e insights na Home.
 - [x] Estimativa de economia por cópias exatas excedentes, preservando favoritas e uma cópia por hash; tamanhos desconhecidos não geram bytes estimados.
 - [x] Removidos FoundationScreen, cards antigos de gestão e rotas /search e /clean. Permanecem Home, Library e Settings no design system novo.
@@ -41,7 +48,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 - `LibraryProvider` coordena apenas um scan e pede pausa ao sair do foreground. `startMetadataScan` e `acknowledgeScanBatch` exigem novo Development Build.
 - O scanner aguarda commit SQLite antes de enviar outro lote. Clusters são reconstruídos em SQL, sem carregar todas as análises no JavaScript.
-- Após interrupção, a enumeração reinicia com segurança; retomada eficiente e análise incremental por asset continuam pendentes.
+- Após interrupção, a enumeração nativa reinicia com segurança; análises válidas são reutilizadas por asset, e a etapa de metadados concluída é restaurada do cache. Cursor nativo persistente entre processos ainda não é suportado.
 - PhotoKit ainda não fornece tamanhos de originais nessa leitura; a UI informa quando a estimativa é parcial. Vídeos grandes representam espaço para revisão, não economia garantida.
 - Validação deste incremento: typecheck, lint, 50 testes e APK Android compilado. Swift e performance em biblioteca grande ainda exigem validação nos dispositivos.
 
@@ -58,7 +65,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - [x] Fluxo de prompt para resultados: comandos locais simples escolhem categoria/idade e abrem a galeria; voltar permite refazer a consulta.
 - [x] Etapa 9: galeria e dashboard consultam o índice SQLite quando há dados indexados; a leitura nativa permanece fallback para índice vazio e filtros ainda não analisados.
 - [x] Etapa 10, base: scanner nativo em lotes, progresso, cursor persistido e retomada; pausa/cancelamento precisam de validação no dispositivo.
-- [ ] Etapa 10, completa: reconciliação de assets removidos foi adicionada ao fim de scans completos; ainda falta indexação incremental por data de modificação e WorkManager/background execution.
+- [ ] Etapa 10, completa: reconciliação de removidos ao fim de scans completos e análise incremental por modificação/versão implementadas; enumeração incremental e WorkManager/background execution ainda pendentes.
 - [x] Etapas 11–14, base local: blur/brilho, pHash, hash de conteúdo, OCR nativo e clusters são persistidos em lotes; validação iOS ainda pendente.
 - [ ] Etapas 15–21: ranking de candidatos, melhor foto, background completo, regras avançadas de intenção e polish.
 

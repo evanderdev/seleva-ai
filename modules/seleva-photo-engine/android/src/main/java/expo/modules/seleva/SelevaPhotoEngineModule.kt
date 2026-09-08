@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicReference
 class SelevaPhotoEngineModule : Module() {
   private var libraryService: PhotoLibraryService? = null
   private val scanAcks = ConcurrentHashMap<String, java.util.concurrent.Semaphore>()
+  private val scanSelections = ConcurrentHashMap<String, Set<String>>()
   private val scanStops = ConcurrentHashMap<String, AtomicReference<String?>>()
   @Synchronized private fun service(context: Context): PhotoLibraryService =
     libraryService ?: PhotoLibraryService(context).also { libraryService = it }
@@ -47,7 +48,7 @@ class SelevaPhotoEngineModule : Module() {
     return if (requested) "denied" else "not-determined"
   }
 
-  private fun scan(jobId: String, batchSize: Int, cursor: String?, metadataOnly: Boolean, promise: Promise) {
+  private fun scan(jobId: String, batchSize: Int, cursor: String?, metadataOnly: Boolean, promise: Promise, incremental: Boolean = false) {
       val context = appContext.reactContext
       if (context == null) {
         promise.reject("DEVICE_UNSUPPORTED", "Context unavailable", null)
@@ -75,7 +76,16 @@ class SelevaPhotoEngineModule : Module() {
           @Suppress("UNCHECKED_CAST")
           val assets = page["assets"] as? List<Map<String, Any>> ?: emptyList()
           val pageCursor = page["nextCursor"] as? String
-          val analyses = if (metadataOnly) emptyList<Map<String, Any>>() else service.analyzeAssets(assets)
+          var selected = assets
+          if (incremental) {
+            sendEvent("scanBatch", mapOf("jobId" to jobId, "assets" to assets,
+              "analyses" to emptyList<Map<String, Any>>(), "requiresAnalysis" to true,
+              "processed" to processed, "total" to total, "cursor" to nextCursor))
+            if (!ack.tryAcquire(60, java.util.concurrent.TimeUnit.SECONDS)) throw IllegalStateException("INDEX_WRITE_TIMEOUT")
+            val ids = scanSelections.remove(jobId) ?: emptySet()
+            selected = if (stop.get() == null) assets.filter { it["id"] in ids } else emptyList()
+          }
+          val analyses = if (metadataOnly) emptyList<Map<String, Any>>() else service.analyzeAssets(selected)
           processed += assets.size
           sendEvent("scanBatch", mapOf(
             "jobId" to jobId,
@@ -118,6 +128,7 @@ class SelevaPhotoEngineModule : Module() {
       } finally {
         scanStops.remove(jobId)
         scanAcks.remove(jobId)
+        scanSelections.remove(jobId)
       }
   }
 
@@ -138,6 +149,12 @@ class SelevaPhotoEngineModule : Module() {
     }
 
     AsyncFunction("startScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, false, promise) }
+    AsyncFunction("startIncrementalScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, false, promise, true) }
+    AsyncFunction("selectScanAssets") { jobId: String, ids: List<String> ->
+      require(ids.size <= 200 && ids.all { it.isNotBlank() })
+      if (scanAcks.containsKey(jobId)) { scanSelections[jobId] = ids.toSet(); scanAcks[jobId]?.release() }
+      Unit
+    }.runOnQueue(Queues.MAIN)
     AsyncFunction("startMetadataScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, true, promise) }
 
     AsyncFunction("acknowledgeScanBatch") { jobId: String -> scanAcks[jobId]?.release(); Unit }.runOnQueue(Queues.MAIN)

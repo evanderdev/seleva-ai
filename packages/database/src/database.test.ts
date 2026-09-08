@@ -93,7 +93,7 @@ async function photo(id: string, favorite = 0, createdAt = 100, size = 1000) {
 }
 async function analysis(id: string, text: string) {
   await db.runAsync(
-    'INSERT INTO photo_analysis(photo_id,ocr_text,is_screenshot,analysis_version,analyzed_at) VALUES(?,?,1,1,100)',
+    "INSERT INTO photo_analysis(photo_id,ocr_text,is_screenshot,analysis_version,model_version,analyzed_at) VALUES(?,?,1,1,'android-heuristic-1',100)",
     id,
     text,
   );
@@ -328,4 +328,49 @@ it('rolls back schema changes if a migration fails', async () => {
   expect(
     sqlite.prepare("SELECT name FROM sqlite_master WHERE name='photos'").all(),
   ).toHaveLength(0);
+});
+
+it('selects only new, changed and outdated analyses in a bounded batch', async () => {
+  for (const id of ['cached', 'changed', 'new', 'old-version', 'old-model'])
+    await photo(id, 0, 100, 1000);
+  for (const id of ['cached', 'changed', 'old-version', 'old-model'])
+    await analysis(id, 'saved OCR');
+  await db.runAsync("UPDATE photos SET modified_at=200 WHERE id='changed'");
+  await db.runAsync(
+    "UPDATE photo_analysis SET analysis_version=0 WHERE photo_id='old-version'",
+  );
+  await db.runAsync(
+    "UPDATE photo_analysis SET model_version='old' WHERE photo_id='old-model'",
+  );
+  expect(
+    (
+      await repository.getPendingAnalysisIds([
+        'cached',
+        'changed',
+        'new',
+        'old-version',
+        'old-model',
+      ])
+    ).sort(),
+  ).toEqual(['changed', 'new', 'old-model', 'old-version']);
+  expect((await repository.getInsights()).pending).toBe(4);
+  await repository.upsertAssets([
+    {
+      id: 'cached',
+      mediaType: 'photo',
+      createdAt: 100,
+      width: 100,
+      height: 100,
+    },
+  ]);
+  expect(await repository.getPendingAnalysisIds(['cached'])).toEqual([]);
+  const [row] = await db.getAllAsync<{ ocr_text: string }>(
+    "SELECT ocr_text FROM photo_analysis WHERE photo_id='cached'",
+  );
+  expect(row?.ocr_text).toBe('saved OCR');
+  await expect(
+    repository.getPendingAnalysisIds(
+      Array.from({ length: 201 }, (_, i) => String(i)),
+    ),
+  ).rejects.toThrow('INVALID_BATCH_SIZE');
 });

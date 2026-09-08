@@ -13,6 +13,7 @@ const scanBatchSchema = z.strictObject({
   processed: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
   cursor: z.string().min(1).nullable(),
+  requiresAnalysis: z.boolean().default(false),
   analyses: z.array(photoAnalysisSchema).max(200).default([]),
 });
 const scanStateSchema = z.strictObject({
@@ -50,6 +51,12 @@ export interface NativeScanTransport {
     batchSize: number,
     cursor: string | null,
   ): Promise<unknown>;
+  startIncrementalScan?(
+    jobId: string,
+    batchSize: number,
+    cursor: string | null,
+  ): Promise<unknown>;
+  selectScanAssets?(jobId: string, ids: string[]): Promise<unknown>;
   acknowledgeScanBatch?(jobId: string): Promise<unknown>;
   startMetadataScan?(
     jobId: string,
@@ -81,6 +88,13 @@ export function createPhotoScanner(native: NativeScanTransport | null) {
     return { ok: false, error: 'DEVICE_UNSUPPORTED' };
   }
   return {
+    async selectAssets(jobId: string, ids: string[]) {
+      if (!native?.selectScanAssets) throw new Error('DEVICE_UNSUPPORTED');
+      await native.selectScanAssets(
+        jobId,
+        z.array(z.string().min(1)).max(200).parse(ids),
+      );
+    },
     async acknowledgeBatch(jobId: string) {
       await native?.acknowledgeScanBatch?.(jobId);
     },
@@ -96,7 +110,13 @@ export function createPhotoScanner(native: NativeScanTransport | null) {
       cursor?: string,
       metadataOnly = false,
     ): Promise<EngineResult<unknown>> {
-      if (!native || (metadataOnly && !native.startMetadataScan))
+      if (
+        !native ||
+        !native.acknowledgeScanBatch ||
+        (metadataOnly
+          ? !native.startMetadataScan
+          : !native.startIncrementalScan || !native.selectScanAssets)
+      )
         return unavailable();
       try {
         const request = scanOptionsSchema.parse(options);
@@ -105,7 +125,7 @@ export function createPhotoScanner(native: NativeScanTransport | null) {
           value: await (
             metadataOnly && native.startMetadataScan
               ? native.startMetadataScan.bind(native)
-              : native.startScan.bind(native)
+              : native.startIncrementalScan!.bind(native)
           )(jobId, request.batchSize, cursor ?? null),
         };
       } catch {

@@ -6,9 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Icon, layout, useTheme, type IconName } from '@seleva/ui';
-import { libraryReader, type LibraryPage } from '@seleva/photo-engine';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Thumbnail } from './LibraryScreen';
 import { planPrompt, promptSchema } from '../features/search/prompt';
 const suggestions: {
   label: string;
@@ -52,24 +50,11 @@ export function AssistantScreen() {
   const colors = useTheme();
   const [prompt, setPrompt] = useState('');
   const [invalid, setInvalid] = useState(false);
-  const [assets, setAssets] = useState<LibraryPage['assets']>([]);
-  const { synchronize, refresh, phase, permission, insights } = useLibrary();
+  const { synchronize, insights } = useLibrary();
   useFocusEffect(
     useCallback(() => {
-      let active = true;
       void synchronize();
-      if (permission !== 'authorized' && permission !== 'limited') {
-        setAssets([]);
-        return;
-      }
-      void libraryReader.listAssets({ limit: 3 }).then((result) => {
-        if (active) setAssets(result.ok ? result.value.assets : []);
-      });
-      return () => {
-        active = false;
-        setAssets([]);
-      };
-    }, [permission, phase, synchronize]),
+    }, [synchronize]),
   );
   function submit() {
     const parsed = promptSchema.safeParse(prompt);
@@ -241,50 +226,6 @@ export function AssistantScreen() {
           ))}
         </ScrollView>
         <LibraryStatus />
-        <View style={{ marginTop: 24, gap: 10 }}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/library')}
-          >
-            <Text
-              style={{ fontSize: 18, fontWeight: '600', color: colors.text }}
-            >
-              {t('yourLibrary')}
-            </Text>
-          </Pressable>
-          <Text style={{ fontSize: 12, color: colors.muted }}>
-            {t('calmLibrary')}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void refresh()}
-            disabled={phase === 'metadata' || phase === 'analysis'}
-          >
-            <Text style={{ fontSize: 12, color: colors.muted }}>
-              {t('refreshIndex')}
-            </Text>
-          </Pressable>
-          {assets.length > 0 ? (
-            <View style={[layout.row, { gap: 10, marginTop: 6 }]}>
-              {assets.map((asset) => (
-                <Pressable
-                  key={asset.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('openLibrary')}
-                  onPress={() => router.push('/library')}
-                  style={{
-                    flex: 1,
-                    height: 150,
-                    borderRadius: 18,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <Thumbnail asset={asset} />
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-        </View>
         <View style={{ flex: 1, minHeight: 64 }} />
         <View style={[layout.row, { gap: 8, paddingTop: 20 }]}>
           <Icon name="lock" size={14} />

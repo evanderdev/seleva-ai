@@ -19,6 +19,12 @@ export interface NativeLibraryModule {
     batchSize: number,
     cursor: string | null,
   ): Promise<unknown>;
+  startIncrementalScan?(
+    jobId: string,
+    batchSize: number,
+    cursor: string | null,
+  ): Promise<unknown>;
+  selectScanAssets?(jobId: string, ids: string[]): Promise<unknown>;
   acknowledgeScanBatch?(jobId: string): Promise<unknown>;
   startMetadataScan?(
     jobId: string,
@@ -42,6 +48,8 @@ export function getNativeLibraryModule(): NativeLibraryModule | null {
 }
 
 export function getNativeScannerModule(): {
+  startIncrementalScan?: NativeLibraryModule['startIncrementalScan'];
+  selectScanAssets?: NativeLibraryModule['selectScanAssets'];
   startScan: NonNullable<NativeLibraryModule['startScan']>;
   startMetadataScan?: NativeLibraryModule['startMetadataScan'];
   acknowledgeScanBatch?: NativeLibraryModule['acknowledgeScanBatch'];
@@ -53,6 +61,8 @@ export function getNativeScannerModule(): {
     return null;
   return {
     startScan: native.startScan.bind(native),
+    startIncrementalScan: native.startIncrementalScan?.bind(native),
+    selectScanAssets: native.selectScanAssets?.bind(native),
     acknowledgeScanBatch: native.acknowledgeScanBatch?.bind(native),
     startMetadataScan: native.startMetadataScan?.bind(native),
     stopScan: native.stopScan.bind(native),

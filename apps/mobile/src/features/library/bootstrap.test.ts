@@ -22,7 +22,7 @@ const completed: ScanJob = {
   startedAt: 1,
   updatedAt: 2,
 };
-function setup(permission: PhotoPermission = 'not-determined') {
+function setup(permission: PhotoPermission = 'not-determined', saved?: string) {
   let current = permission;
   const getPermission = jest.fn(
     async (): Promise<EngineResult<PhotoPermission>> => ({
@@ -40,15 +40,23 @@ function setup(permission: PhotoPermission = 'not-determined') {
     async () => completed,
   );
   const getInsights = jest.fn(async () => insights);
+  const preferences = new Map<string, string>(
+    saved ? [['library-metadata-v1', saved]] : [],
+  );
+  const getPreference = jest.fn(async (key: string) => preferences.get(key));
+  const setPreference = jest.fn(async (key: string, value: string) => {
+    preferences.set(key, value);
+  });
   const stop = jest.fn(async () => true);
   const controller = createLibraryBootstrap({
     access: { getPermission, requestPermission },
-    repository: { getInsights },
+    repository: { getInsights, getPreference, setPreference },
     scan,
     stop,
   });
   return {
     controller,
+    preferences,
     getPermission,
     requestPermission,
     scan,
@@ -97,4 +105,73 @@ it('reports failure without automatically retrying in a loop', async () => {
   await controller.start();
   expect(controller.getSnapshot().phase).toBe('error');
   expect(scan).toHaveBeenCalledTimes(1);
+});
+
+it('reopens a complete fresh index without native scanning', async () => {
+  const saved = JSON.stringify({
+    completedAt: Date.now(),
+    permission: 'authorized',
+  });
+  const { controller, scan, getInsights } = setup('authorized', saved);
+  getInsights.mockResolvedValue({ ...insights, pending: 0 });
+  await controller.start();
+  expect(scan).not.toHaveBeenCalled();
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'ready',
+    insights: { total: 4 },
+  });
+  await controller.refresh();
+  expect(scan.mock.calls.map(([options]) => options.metadataOnly)).toEqual([
+    true,
+  ]);
+});
+it('resumes pending analysis after reopening without repeating metadata', async () => {
+  const { controller, scan } = setup(
+    'authorized',
+    JSON.stringify({ completedAt: Date.now(), permission: 'authorized' }),
+  );
+  await controller.start();
+  expect(scan.mock.calls.map(([options]) => options.metadataOnly)).toEqual([
+    false,
+  ]);
+});
+it.each([
+  'invalid',
+  JSON.stringify({ completedAt: 1, permission: 'authorized' }),
+  JSON.stringify({
+    completedAt: Date.now() + 3600000,
+    permission: 'authorized',
+  }),
+])('refreshes expired or invalid metadata cache: %s', async (saved) => {
+  const { controller, scan } = setup('authorized', saved);
+  await controller.start();
+  expect(scan.mock.calls.map(([options]) => options.metadataOnly)).toEqual([
+    true,
+    false,
+  ]);
+});
+it('keeps completed metadata and saved insights when analysis fails', async () => {
+  const { controller, scan, preferences } = setup('authorized');
+  scan.mockImplementation(async ({ metadataOnly }) =>
+    metadataOnly ? completed : { ...completed, status: 'failed' },
+  );
+  await controller.start();
+  expect(preferences.get('library-metadata-v1')).toBeDefined();
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'error',
+    insights: { total: 4 },
+  });
+  scan.mockClear();
+  await controller.retry();
+  expect(scan.mock.calls.map(([options]) => options.metadataOnly)).toEqual([
+    false,
+  ]);
+});
+it('reconciles limited access even when the persisted cache is fresh', async () => {
+  const { controller, scan } = setup(
+    'limited',
+    JSON.stringify({ completedAt: Date.now(), permission: 'limited' }),
+  );
+  await controller.start();
+  expect(scan.mock.calls[0]?.[0].metadataOnly).toBe(true);
 });

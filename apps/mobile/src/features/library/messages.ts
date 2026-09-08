@@ -1,4 +1,10 @@
 export const libraryEn = {
+  preanalysisSummary: 'Pre-analysis summary',
+  scanPartial: 'Saved results available; some items are still pending',
+  metadataAvailable: '{{count}} items in the index',
+  analysisAvailable: '{{count}} analyzed · {{pending}} pending',
+  savedAnalysisHint:
+    'Each completed batch is saved and available. Updates reuse existing analysis. Check for new photos with Update library.',
   preparingLibrary: 'Preparing your library',
   analyzingLibrary: 'Finding opportunities',
   preparationHint: 'You can explore while we prepare everything on your phone.',
@@ -22,6 +28,13 @@ export const libraryEn = {
   refreshIndex: 'Update library',
 };
 export const libraryPt: Record<keyof typeof libraryEn, string> = {
+  preanalysisSummary: 'Resumo da pré-análise',
+  scanPartial:
+    'Resultados salvos disponíveis; alguns itens ainda estão pendentes',
+  metadataAvailable: '{{count}} itens no índice',
+  analysisAvailable: '{{count}} analisados · {{pending}} pendentes',
+  savedAnalysisHint:
+    'Cada lote concluído fica salvo e disponível. Atualizações aproveitam as análises existentes. Use Atualizar biblioteca para buscar novas fotos.',
   preparingLibrary: 'Preparando sua biblioteca',
   analyzingLibrary: 'Encontrando oportunidades',
   preparationHint:
@@ -47,6 +60,13 @@ export const libraryPt: Record<keyof typeof libraryEn, string> = {
   refreshIndex: 'Atualizar biblioteca',
 };
 export const libraryEs: Record<keyof typeof libraryEn, string> = {
+  preanalysisSummary: 'Resumen del análisis previo',
+  scanPartial:
+    'Resultados guardados disponibles; algunos elementos siguen pendientes',
+  metadataAvailable: '{{count}} elementos en el índice',
+  analysisAvailable: '{{count}} analizados · {{pending}} pendientes',
+  savedAnalysisHint:
+    'Cada lote terminado queda guardado y disponible. Las actualizaciones reutilizan el análisis existente. Usa Actualizar biblioteca para buscar fotos nuevas.',
   preparingLibrary: 'Preparando tu biblioteca',
   analyzingLibrary: 'Encontrando oportunidades',
   preparationHint:

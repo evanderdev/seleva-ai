@@ -22,7 +22,8 @@ export function formatStorage(bytes: number, locale: string) {
 export function LibraryStatus() {
   const { t, i18n } = useTranslation();
   const colors = useTheme();
-  const { phase, permission, job, insights, error, retry } = useLibrary();
+  const { phase, permission, job, insights, error, retry, refresh } =
+    useLibrary();
   const busy = ['opening', 'metadata', 'analysis'].includes(phase);
   const denied = phase === 'permission';
   return (
@@ -47,7 +48,9 @@ export function LibraryStatus() {
               : phase === 'error'
                 ? 'preparationFailed'
                 : phase === 'ready'
-                  ? 'scanReady'
+                  ? insights?.pending
+                    ? 'scanPartial'
+                    : 'scanReady'
                   : phase === 'paused'
                     ? 'scanPaused'
                     : phase === 'analysis'
@@ -98,6 +101,27 @@ export function LibraryStatus() {
       )}
       {insights && (
         <>
+          <Text style={{ color: colors.text, fontWeight: '600' }}>
+            {t('preanalysisSummary')}
+          </Text>
+          <Text style={{ color: colors.muted, fontSize: 12 }}>
+            {t('metadataAvailable', { count: insights.total })}
+          </Text>
+          <Text style={{ color: colors.muted, fontSize: 12 }}>
+            {t('analysisAvailable', {
+              count: Math.max(0, insights.total - insights.pending),
+              pending: insights.pending,
+            })}
+          </Text>
+          <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 19 }}>
+            {t('savedAnalysisHint')}
+          </Text>
+          <Button
+            variant="outline"
+            label={t('openLibrary')}
+            onPress={() => router.push('/library')}
+          />
+
           <Pressable
             accessibilityRole="button"
             disabled={!insights.duplicateCopies}
@@ -143,6 +167,13 @@ export function LibraryStatus() {
             </Text>
           )}
         </>
+      )}
+      {!busy && !denied && (
+        <Button
+          variant="outline"
+          label={t('refreshIndex')}
+          onPress={() => void refresh()}
+        />
       )}
       {denied && (
         <Button

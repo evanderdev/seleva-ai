@@ -56,8 +56,16 @@ export async function runLibraryScan(
               status: 'running',
               checkpoint: batch.cursor,
             });
+            if (batch.analyses.length) await repository.rebuildClusters();
             callbacks.onCommitted?.();
-            await photoScanner.acknowledgeBatch(job.id);
+            if (batch.requiresAnalysis) {
+              const pending = await repository.getPendingAnalysisIds(
+                batch.assets.map((asset) => asset.id),
+              );
+              await photoScanner.selectAssets(job.id, pending);
+            } else {
+              await photoScanner.acknowledgeBatch(job.id);
+            }
           })
           .catch((error: unknown) => {
             writeError = error;
@@ -179,7 +187,7 @@ export async function runLibraryScan(
     if (writeError) throw writeError;
     if (terminal === 'completed') {
       await repository.removeAssetsNotIndexedSince(indexingAt);
-      if (!callbacks.metadataOnly) await repository.rebuildClusters();
+      await repository.rebuildClusters();
     }
     if (!result.ok && terminal === undefined) {
       await repository.updateScanJob(job.id, {
