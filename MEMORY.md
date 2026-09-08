@@ -27,9 +27,9 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - O prompt usa somente regras locais neste incremento: screenshots/prints, vídeos, favoritos, fotos e termos de idade. A rota de resultados mantém filtros e permite voltar para refazer a consulta.
 - Preferência `themeMode` (light/dark) é persistida junto ao idioma; o Home já aplica o fundo escuro e os próximos componentes devem consumir a mesma preferência.
 
-- Tema de refer?ncia centralizado em `packages/ui`: `ThemeProvider`/`useTheme`, paletas claras/escuras, bot?es e ?cones nativos. Novos componentes devem consumir esses tokens, sem cores de texto fixas do tema claro.
-- Home e painel de edi??o dos resultados compartilham `features/search/prompt.ts`, validado com Zod. Atalhos usam filtros expl?citos; palavras de comando n?o viram termos OCR.
-- Resultados mostram contagem e sele??o da p?gina (at? 60 itens), sem apresentar essa contagem como total global. Pr?via e confirma??o do SO continuam obrigat?rias para lixeira.
+- Tema de referência centralizado em `packages/ui`: `ThemeProvider`/`useTheme`, paletas claras/escuras, botões e ícones nativos. Novos componentes devem consumir esses tokens, sem cores de texto fixas do tema claro.
+- Home e painel de edição dos resultados compartilham `features/search/prompt.ts`, validado com Zod. Atalhos usam filtros explícitos; palavras de comando não viram termos OCR.
+- Resultados mostram contagem e seleção da página (até 60 itens), sem apresentar essa contagem como total global. Prévia e confirmação do SO continuam obrigatórias para lixeira.
 
 ## Estado Atual das Features
 
@@ -62,8 +62,8 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - [x] Etapas 11–14, base local: blur/brilho, pHash, hash de conteúdo, OCR nativo e clusters são persistidos em lotes; validação iOS ainda pendente.
 - [ ] Etapas 15–21: ranking de candidatos, melhor foto, background completo, regras avançadas de intenção e polish.
 
-- [x] Tema das refer?ncias aplicado ? Home, resultados, painel inferior de busca e configura??es; prefer?ncias claras/escuras em todas essas telas, tradu??es en/pt-BR/es e funcionalidades locais conectadas.
-- [ ] Compara??o visual final do tema no aparelho desbloqueado e no iOS.
+- [x] Tema das referências aplicado à Home, resultados, painel inferior de busca e configurações; preferências claras/escuras em todas essas telas, traduções en/pt-BR/es e funcionalidades locais conectadas.
+- [ ] Comparação visual final do tema no aparelho desbloqueado e no iOS.
 
 ## Contratos e banco
 
