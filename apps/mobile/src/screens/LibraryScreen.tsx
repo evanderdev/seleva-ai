@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   AppState,
+  Alert,
   FlatList,
   Image,
   Modal,
@@ -20,6 +21,8 @@ import {
 } from '@seleva/photo-engine';
 import { Button, theme } from '@seleva/ui';
 import { LibraryPermissionCard } from '../components/LibraryPermissionCard';
+import { usePhotoRepository } from '../services/database';
+import type { QueryPlan } from '@seleva/core';
 
 function Thumbnail({
   asset,
@@ -72,20 +75,37 @@ export function LibraryScreen({
   mode = 'library',
   initialCategory = mode === 'clean' ? 'screenshots' : 'all',
   initialBefore,
+  initialMinFileSize,
+  initialDuplicate = false,
+  initialSimilar = false,
+  initialMinBlur,
+  initialOcrTerms,
 }: {
   mode?: 'library' | 'search' | 'clean';
   initialCategory?: LibraryFilter['category'];
   initialBefore?: number;
+  initialMinFileSize?: number;
+  initialDuplicate?: boolean;
+  initialSimilar?: boolean;
+  initialMinBlur?: number;
+  initialOcrTerms?: string[];
 }) {
   const { t, i18n } = useTranslation();
+  const repository = usePhotoRepository();
   const [category, setCategory] =
     useState<LibraryFilter['category']>(initialCategory);
   const [before, setBefore] = useState<number | undefined>(initialBefore);
+  const [minFileSize] = useState<number | undefined>(initialMinFileSize);
+  const [duplicate] = useState(initialDuplicate);
+  const [similar] = useState(initialSimilar);
+  const [minBlur] = useState<number | undefined>(initialMinBlur);
+  const [ocrTerms] = useState<string[] | undefined>(initialOcrTerms);
   const [preview, setPreview] = useState<LibraryPage['assets'][number]>();
   const [selected, setSelected] = useState<string[]>([]);
   const [page, setPage] = useState<LibraryPage>({ assets: [] });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [indexedAssets, setIndexedAssets] = useState(0);
   const generation = useRef(0);
   const load = useCallback(
     async (cursor?: string) => {
@@ -95,17 +115,65 @@ export function LibraryScreen({
       setPage({ assets: [] });
       setSelected([]);
       setPreview(undefined);
-      const result = await libraryReader.listAssets({
-        limit: 60,
-        cursor,
-        filter: { category, before },
-      });
-      if (request !== generation.current) return;
-      if (result.ok) setPage(result.value);
-      else setError(result.error);
-      setBusy(false);
+      try {
+        const summary = await repository.getSummary();
+        if (request !== generation.current) return;
+        setIndexedAssets(summary.photos + summary.videos);
+        const canUseIndex =
+          summary.photos + summary.videos > 0 &&
+          (minFileSize === undefined || summary.photos + summary.videos > 0);
+        const requiresAnalysis =
+          duplicate || similar || minBlur !== undefined || Boolean(ocrTerms?.length);
+        if (!canUseIndex && requiresAnalysis) {
+          setError('DEVICE_UNSUPPORTED');
+          setBusy(false);
+          return;
+        }
+        const result = canUseIndex
+          ? await (async () => {
+            const filters: NonNullable<QueryPlan['filters']> = {};
+            if (category === 'photos') filters.mediaTypes = ['photo'];
+            if (category === 'videos') filters.mediaTypes = ['video'];
+            if (category === 'screenshots') filters.screenshot = true;
+            if (category === 'favorites') filters.favorite = true;
+            if (before !== undefined) filters.before = before;
+            if (minFileSize !== undefined) filters.minFileSize = minFileSize;
+            if (duplicate) filters.duplicate = true;
+            if (similar) filters.similar = true;
+            if (minBlur !== undefined) filters.minBlur = minBlur;
+            if (ocrTerms?.length) filters.ocrTerms = ocrTerms;
+              const page = await repository.query(
+                { filters, exclusions: { favorites: false } },
+                { limit: 60, cursor },
+              );
+              return { ok: true as const, value: page };
+            })()
+          : await libraryReader.listAssets({
+              limit: 60,
+              cursor,
+              filter: { category, before },
+            });
+        if (request !== generation.current) return;
+        if (result.ok) setPage(result.value);
+        else setError(result.error);
+        setBusy(false);
+      } catch {
+        if (request === generation.current) {
+          setError('UNKNOWN');
+          setBusy(false);
+        }
+      }
     },
-    [category, before],
+    [
+      category,
+      before,
+      minFileSize,
+      duplicate,
+      similar,
+      minBlur,
+      ocrTerms,
+      repository,
+    ],
   );
   useFocusEffect(
     useCallback(() => {
@@ -138,6 +206,14 @@ export function LibraryScreen({
             accessibilityRole="button"
             accessibilityLabel={t('openPreview')}
             onPress={() => setPreview(item)}
+            onLongPress={() => {
+              if (mode !== 'clean') return;
+              setSelected((current) =>
+                current.includes(item.id)
+                  ? current.filter((id) => id !== item.id)
+                  : [...current, item.id],
+              );
+            }}
           >
             <Thumbnail asset={item} />
             <Text style={styles.placeholder}>
@@ -155,6 +231,11 @@ export function LibraryScreen({
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.title}>{t(mode)}</Text>
+            {indexedAssets > 0 && (
+              <Text style={styles.placeholder}>
+                {t('indexedCount', { count: indexedAssets })}
+              </Text>
+            )}
             <LibraryPermissionCard />
             <ScrollView horizontal contentContainerStyle={styles.filters}>
               {(
@@ -179,6 +260,12 @@ export function LibraryScreen({
             />
             {category === 'screenshots' && (
               <Text style={styles.placeholder}>{t('screenshotHint')}</Text>
+            )}
+            {minFileSize !== undefined && (
+              <Text style={styles.placeholder}>{t('largeMediaHint')}</Text>
+            )}
+            {(duplicate || similar || minBlur !== undefined || ocrTerms?.length) && (
+              <Text style={styles.placeholder}>{t('analysisFilterHint')}</Text>
             )}
             {mode === 'clean' && <Text>{t('reviewOnly')}</Text>}
             {selected.length > 0 && (
@@ -264,6 +351,24 @@ export function LibraryScreen({
               </Text>
             )}
             {preview.isFavorite && <Text>{t('filter_favorites')}</Text>}
+            {(category === 'screenshots' ||
+              duplicate ||
+              similar ||
+              minBlur !== undefined ||
+              minFileSize !== undefined ||
+              before !== undefined ||
+              Boolean(ocrTerms?.length)) && (
+              <View style={styles.reasons}>
+                <Text style={styles.reasonTitle}>{t('whySelected')}</Text>
+                {category === 'screenshots' && <Text>{t('reasonScreenshot')}</Text>}
+                {duplicate && <Text>{t('reasonDuplicate')}</Text>}
+                {similar && <Text>{t('reasonSimilar')}</Text>}
+                {minBlur !== undefined && <Text>{t('reasonBlurry')}</Text>}
+                {minFileSize !== undefined && <Text>{t('reasonLargeMedia')}</Text>}
+                {before !== undefined && <Text>{t('reasonOldMedia')}</Text>}
+                {ocrTerms?.length ? <Text>{t('reasonOcr')}</Text> : null}
+              </View>
+            )}
             {mode === 'clean' && (
               <Button
                 label={t(
@@ -284,15 +389,54 @@ export function LibraryScreen({
               <>
                 <Button
                   label={t('moveToTrash')}
-                  disabled
-                  onPress={() => undefined}
+                  disabled={busy}
+                  onPress={() => {
+                    const ids = [...selected];
+                    const bytes = page.assets
+                      .filter((asset) => ids.includes(asset.id))
+                      .reduce((sum, asset) => sum + (asset.fileSize ?? 0), 0);
+                    Alert.alert(
+                      t('confirmMoveToTrashTitle'),
+                      t('confirmMoveToTrashMessage', { count: ids.length }),
+                      [
+                        { text: t('cancel'), style: 'cancel' },
+                        {
+                          text: t('moveToTrash'),
+                          style: 'destructive',
+                          onPress: () => {
+                            void (async () => {
+                              setBusy(true);
+                              const result = await libraryReader.trashAssets?.({
+                                ids,
+                                userConfirmed: true,
+                              });
+                              if (!result || !result.ok) {
+                                setError(
+                                  result && !result.ok
+                                    ? result.error
+                                    : 'DEVICE_UNSUPPORTED',
+                                );
+                                setBusy(false);
+                                return;
+                              }
+                              await repository.removeAssets(result.value.trashedIds);
+                              await repository.recordCleanup(
+                                result.value.trashedIds,
+                                bytes,
+                                result.value.cancelled ? 'cancelled' : 'trashed',
+                              );
+                              setSelected([]);
+                              setPreview(undefined);
+                              setBusy(false);
+                              void load();
+                            })();
+                          },
+                        },
+                      ],
+                    );
+                  }}
                 />
-                <Button
-                  label={t('deletePermanently')}
-                  disabled
-                  onPress={() => undefined}
-                />
-                <Text style={styles.placeholder}>{t('actionsComingSoon')}</Text>
+                <Text style={styles.placeholder}>{t('trashSafetyNote')}</Text>
               </>
             )}
             <Text style={styles.placeholder}>{t('previewHint')}</Text>
@@ -328,4 +472,6 @@ const styles = StyleSheet.create({
   },
   image: { width: '100%', height: '100%', borderRadius: 8 },
   placeholder: { color: theme.colors.muted, textAlign: 'center', fontSize: 12 },
+  reasons: { gap: 4, padding: 12, backgroundColor: theme.colors.surface, borderRadius: 12 },
+  reasonTitle: { color: theme.colors.text, fontWeight: '700' },
 });

@@ -70,6 +70,22 @@ it('returns unavailable in Expo Go', async () => {
   });
 });
 
+it('requires explicit confirmation and validates trash responses', async () => {
+  const native = {
+    ...transport({ assets: [] }),
+    trashAssets: jest.fn(async () => ({
+      trashedIds: [asset.id],
+      cancelled: false,
+    })),
+  };
+  const reader = createLibraryReader(native);
+  await expect(reader.trashAssets?.({ ids: [], userConfirmed: true })).rejects.toThrow();
+  expect(native.trashAssets).not.toHaveBeenCalled();
+  expect(
+    await reader.trashAssets?.({ ids: [asset.id], userConfirmed: true }),
+  ).toEqual({ ok: true, value: { trashedIds: [asset.id], cancelled: false } });
+});
+
 it('validates filters before native queries and forwards date boundaries', async () => {
   const native = {
     ...transport({ assets: [] }),

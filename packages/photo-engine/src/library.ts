@@ -14,7 +14,7 @@ export const libraryPageRequestSchema = z.strictObject({
   cursor: z.string().min(1).max(1024).optional(),
   filter: libraryFilterSchema.optional(),
 });
-const assetSchema = z.strictObject({
+export const libraryAssetSchema = z.strictObject({
   id: z.string().min(1),
   mediaType: z.enum(['photo', 'video']),
   createdAt: z.number().finite().nonnegative(),
@@ -26,12 +26,20 @@ const assetSchema = z.strictObject({
   isFavorite: z.boolean().optional(),
 });
 export const libraryPageSchema = z.strictObject({
-  assets: z.array(assetSchema).max(200),
+  assets: z.array(libraryAssetSchema).max(200),
   nextCursor: z.string().min(1).optional(),
 });
 export const thumbnailRequestSchema = z.strictObject({
   id: z.string().min(1).max(1024),
   size: z.number().int().min(32).max(512).default(256),
+});
+export const trashRequestSchema = z.strictObject({
+  ids: z.array(z.string().min(1)).min(1).max(500),
+  userConfirmed: z.literal(true),
+});
+export const trashResultSchema = z.strictObject({
+  trashedIds: z.array(z.string().min(1)).max(500),
+  cancelled: z.boolean(),
 });
 export type LibraryPage = z.infer<typeof libraryPageSchema>;
 export interface LibraryTransport {
@@ -43,6 +51,7 @@ export interface LibraryTransport {
   ): Promise<unknown>;
   listAssets(limit: number, cursor: string | null): Promise<unknown>;
   getThumbnail(id: string, size: number): Promise<unknown>;
+  trashAssets?(ids: string[]): Promise<unknown>;
 }
 export function createLibraryReader(native: LibraryTransport | null) {
   async function invoke<T>(
@@ -103,6 +112,15 @@ export function createLibraryReader(native: LibraryTransport | null) {
           .startsWith('file://')
           .parse(await module.getThumbnail(request.id, request.size)),
       );
+    },
+    async trashAssets(
+      input: z.input<typeof trashRequestSchema>,
+    ): Promise<EngineResult<z.infer<typeof trashResultSchema>>> {
+      const request = trashRequestSchema.parse(input);
+      return invoke(async (module) => {
+        if (!module.trashAssets) throw { code: 'DEVICE_UNSUPPORTED' };
+        return trashResultSchema.parse(await module.trashAssets(request.ids));
+      });
     },
   };
 }

@@ -26,6 +26,7 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-dev-client',
     'expo-status-bar',
+    'expo-splash-screen',
     'expo-font',
     'expo-asset',
     ['expo-sqlite', { enableFTS: true }],

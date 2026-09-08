@@ -28,7 +28,25 @@ export interface PhotoAnalysis {
   isDocument?: boolean;
   isMeme?: boolean;
   perceptualHash?: string;
+  contentHash?: string;
 }
+
+export const photoAnalysisSchema = z.strictObject({
+  photoId: z.string().min(1),
+  analysisVersion: z.number().int().positive(),
+  modelVersion: z.string().min(1).optional(),
+  analyzedAt: z.number().int().nonnegative(),
+  blurScore: z.number().min(0).max(1).optional(),
+  qualityScore: z.number().min(0).max(1).optional(),
+  brightnessScore: z.number().min(0).max(1).optional(),
+  faceCount: z.number().int().nonnegative().optional(),
+  ocrText: z.string().optional(),
+  isScreenshot: z.boolean().optional(),
+  isDocument: z.boolean().optional(),
+  isMeme: z.boolean().optional(),
+  perceptualHash: z.string().min(1).optional(),
+  contentHash: z.string().min(1).optional(),
+});
 
 export interface PhotoQuality {
   overall: number;
@@ -128,6 +146,7 @@ export const queryPlanSchema = z.strictObject({
       after: timestamp.optional(),
       mediaTypes: z.array(z.enum(['photo', 'video'])).optional(),
       screenshot: z.boolean().optional(),
+      favorite: z.boolean().optional(),
       duplicate: z.boolean().optional(),
       similar: z.boolean().optional(),
       hasFaces: z.boolean().optional(),

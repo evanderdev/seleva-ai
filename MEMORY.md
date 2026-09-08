@@ -15,6 +15,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - Configuração nativa persistente fica em app.config.ts/plugins/Expo Modules; android/ios são gerados e ignorados no Git.
 - Expo Go serve UI; produto completo requer Development Build. Nunca sacrificar recursos nativos pelo Expo Go.
 - UI usa messages em en, pt-BR e es, com fallback inglês. Primitivas React Native substituem componentes DOM incompatíveis.
+- OCR Android usa ML Kit bundled e OCR iOS usa Vision; ambos processam imagens localmente e persistem somente texto/metadata no SQLite.
 - Retornos do módulo são unknown até validação Zod no adapter; ausência do módulo não pode aparentar sucesso.
 - SQL usa parâmetros, páginas até 200 e cursores ligados à consulta. Proteções/rankings não implementados geram erro explícito.
 - Não editar schema inicial depois que houver dados de produção: adicionar migration com nova versão.
@@ -22,6 +23,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - `queryAssets` filtra no PhotoKit/MediaStore antes de paginar; não filtrar apenas os 60 itens no JS. Cursores pertencem à categoria e ao período.
 - Screenshots Android usam heurística de nome/pasta; iOS usa subtipo PhotoKit. Não tratar esses resultados como recomendação automática de exclusão.
 - A navegação principal é um Stack: Home com prompt/sugestões, resultados em `/library` e Settings no único botão do cabeçalho. Não reintroduzir abas inferiores.
+- O Development Build usa `expo-splash-screen` com plugin no `app.config.ts`; ao adicionar módulos Expo nativos, executar prebuild antes do Gradle.
 - O prompt usa somente regras locais neste incremento: screenshots/prints, vídeos, favoritos, fotos e termos de idade. A rota de resultados mantém filtros e permite voltar para refazer a consulta.
 - Preferência `themeMode` (light/dark) é persistida junto ao idioma; o Home já aplica o fundo escuro e os próximos componentes devem consumir a mesma preferência.
 
@@ -36,22 +38,23 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - [x] Código de leitura paginada e thumbnails PhotoKit/MediaStore; validação nativa pendente.
 - [x] Prévia da galeria com FlatList e 60 assets transitórios por página; sem indexação JS.
 - [x] Busca nativa por fotos, vídeos, screenshots, favoritos e itens anteriores a um ano; UI em en/pt-BR/es. Validação em dispositivo pendente.
-- [x] Prévia ampliada com metadados e seleção transitória por página na aba Limpar; ainda sem ação de lixeira.
+- [x] Prévia ampliada com metadados, seleção transitória por página e confirmação para mover itens à lixeira.
 - [x] Fluxo de prompt para resultados: comandos locais simples escolhem categoria/idade e abrem a galeria; voltar permite refazer a consulta.
-- [ ] Etapa 9: galeria real conectada ao índice.
-- [ ] Etapa 10: scanner nativo, checkpoints, retomada e indexação incremental.
-- [ ] Etapas 11–21: análise, OCR, busca, limpeza com revisão, regras de intenção e polish.
+- [x] Etapa 9: galeria e dashboard consultam o índice SQLite quando há dados indexados; a leitura nativa permanece fallback para índice vazio e filtros ainda não analisados.
+- [x] Etapa 10, base: scanner nativo em lotes, progresso, cursor persistido e retomada; pausa/cancelamento precisam de validação no dispositivo.
+- [ ] Etapa 10, completa: reconciliação de assets removidos foi adicionada ao fim de scans completos; ainda falta indexação incremental por data de modificação e WorkManager/background execution.
+- [x] Etapas 11–14, base local: blur/brilho, pHash, hash de conteúdo, OCR nativo e clusters são persistidos em lotes; validação iOS ainda pendente.
+- [ ] Etapas 15–21: ranking de candidatos, melhor foto, background completo, regras avançadas de intenção e polish.
 
 ## Contratos e banco
 
 `packages/core`: PhotoAsset, PhotoAnalysis, PhotoQuality, PhotoCluster, ScanJob,
 ScanProgressEvent, QueryPlan/PhotoQueryPlan, PhotoQuery, CleanupCandidate, PhotoEngine e IntentProvider.
-`packages/database`: schema version 1, foreign keys, WAL, migration transacional e FTS5
+`packages/database`: schema version 2, foreign keys, WAL, migration transacional e FTS5
 sincronizado por triggers. Consultas por data/tipo/tamanho/qualidade/screenshots/OCR/labels/clusters.
-Índice ainda vazio: não existe worker que o alimente. `getSummary` não estima espaço recuperável.
-`packages/photo-engine`: adapters de capacidades/permissões, leitura paginada e thumbnails.
-O reader nativo alimenta apenas a prévia transitória; o índice ainda depende do scanner.
-Native events do scanner estão declarados, sem emissões fictícias.
+O writer recebe lotes nativos e mantém `scan_jobs`; `getSummary` informa contagens e bytes conhecidos.
+`packages/photo-engine`: adapters de capacidades/permissões, leitura paginada, thumbnails, scanner e lixeira.
+O reader nativo continua como fallback para páginas sem índice ou filtros que ainda dependem de análise nativa.
 
 ## Ambiente
 
@@ -67,7 +70,7 @@ APK Android debug arm64 compilado com sucesso via unidade virtual temporária S:
 Backup automático Android está desativado; exclusão de backup iOS do índice precisa ser
 implementada e validada antes de persistir análises pessoais.
 
-Última rodada: typecheck nos seis pacotes, lint e 26 testes passaram. Bundle Android dos
+Última rodada: typecheck nos seis pacotes, lint e 33 testes passaram. Bundle Android dos
 filtros compilado pelo Metro. APK debug Android atualizado compilado com sucesso e instalado
 no aparelho conectado via adb; execução funcional da galeria ainda precisa ser observada no aparelho.
 Bundles Android/iOS e APK da prévia anterior constam em docs/verification.md.

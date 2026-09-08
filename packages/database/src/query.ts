@@ -37,6 +37,8 @@ export function buildPhotoQuery(input: QueryPlan, request: PageRequest) {
   };
   const filters = plan.filters;
   if (plan.exclusions.favorites) where.push('p.favorite = 0');
+  if (filters?.favorite !== undefined)
+    add('p.favorite = ?', Number(filters.favorite));
   if (filters?.before !== undefined) add('p.created_at < ?', filters.before);
   if (filters?.after !== undefined) add('p.created_at > ?', filters.after);
   if (filters?.minFileSize !== undefined)
@@ -76,7 +78,7 @@ export function buildPhotoQuery(input: QueryPlan, request: PageRequest) {
     const condition =
       kind === 'duplicate'
         ? "c.kind IN ('exact','visual')"
-        : "c.kind = 'similar'";
+        : "c.kind IN ('similar','visual')";
     where.push(
       `${enabled ? '' : 'NOT '}EXISTS (SELECT 1 FROM photo_cluster_members m JOIN photo_clusters c ON c.id = m.cluster_id WHERE m.photo_id = p.id AND ${condition} AND (SELECT COUNT(*) FROM photo_cluster_members other WHERE other.cluster_id = c.id) > 1)`,
     );

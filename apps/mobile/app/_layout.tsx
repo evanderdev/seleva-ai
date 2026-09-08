@@ -5,16 +5,18 @@ import { theme } from '@seleva/ui';
 import { Button } from 'react-native';
 import i18n from '../src/i18n';
 import { DatabaseProvider } from '../src/services/database';
+import { usePreferences } from '../src/stores/preferences';
 
 function Navigation() {
   const { t } = useTranslation();
+  const dark = usePreferences((state) => state.themeMode === 'dark');
   return (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style={dark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: theme.colors.surface },
-          headerTintColor: theme.colors.text,
+          headerStyle: { backgroundColor: dark ? '#1B2A26' : theme.colors.surface },
+          headerTintColor: dark ? '#F3F7F4' : theme.colors.text,
         }}
       >
         <Stack.Screen

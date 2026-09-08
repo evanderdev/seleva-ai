@@ -59,6 +59,13 @@ CREATE TRIGGER analysis_delete AFTER DELETE ON photo_analysis BEGIN
 END;
 `,
   },
+  {
+    version: 2,
+    sql: `
+ALTER TABLE photo_analysis ADD COLUMN content_hash TEXT;
+CREATE INDEX photo_analysis_content_hash ON photo_analysis(content_hash);
+`,
+  },
 ] as const;
 
 export async function migrate(db: SqlDatabase): Promise<void> {

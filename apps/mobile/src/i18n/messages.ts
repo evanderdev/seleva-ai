@@ -1,5 +1,16 @@
 export const en = {
   moveToTrash: 'Move selected to trash',
+  confirmMoveToTrashTitle: 'Move to trash?',
+  confirmMoveToTrashMessage: 'Move {{count}} selected items to the device trash?',
+  cancel: 'Cancel',
+  trashSafetyNote: 'You review every selected item before this action.',
+  indexedCount: '{{count}} items available in the local index.',
+  librarySummary: 'Your local library',
+  indexedMedia: 'indexed items',
+  photosCount: '{{count}} photos',
+  videosCount: '{{count}} videos',
+  knownStorage: '{{size}} with known size',
+  openLibrary: 'Open library',
   deletePermanently: 'Delete permanently',
   actionsComingSoon:
     'Actions will be enabled after the native confirmation flow is connected.',
@@ -16,6 +27,7 @@ export const en = {
   findBlurry: 'Find blurry photos',
   largeVideos: 'Review large videos',
   oldPhotos: 'Find photos from last year',
+  findDuplicates: 'Find duplicate photos',
   queryUnavailable:
     'This filter requires a compatible device and the latest SelevaAI development build.',
   refreshResults: 'Your library changed. Refresh to see the latest results.',
@@ -36,8 +48,18 @@ export const en = {
   durationSeconds: '{{seconds}} seconds',
   screenshotHint:
     'On Android, screenshots are identified by file or folder name and may be missed or misidentified.',
+  largeMediaHint: 'Showing indexed media larger than 500 MB.',
+  analysisFilterHint: 'Using analysis, hashes and local OCR from this device.',
+  whySelected: 'Why this item is here',
+  reasonScreenshot: 'Screenshot detected on the device.',
+  reasonDuplicate: 'Duplicate content cluster detected.',
+  reasonSimilar: 'Visually similar content cluster detected.',
+  reasonBlurry: 'Low sharpness score.',
+  reasonLargeMedia: 'Large file size.',
+  reasonOldMedia: 'Older than the selected date.',
+  reasonOcr: 'Matches local OCR text.',
   reviewOnly:
-    'Review photos and select items on this page. Selection resets when you change pages or filters. Moving to trash is not available yet.',
+    'Review photos and select items on this page. Selection resets when you change pages or filters. Confirm before moving anything to trash.',
   previewHint:
     'Local preview up to 512 pixels. Video playback is not available yet.',
   browseLibrary: 'Explore your photos',
@@ -59,7 +81,15 @@ export const en = {
   permission_denied: 'Photo access was denied. You can change it in settings.',
   permission_restricted: 'Photo access is restricted by your device.',
   indexingPending:
-    'Your permission is saved. Library indexing will be available in a future version.',
+    'Your permission is saved. Use the index button below to build the local index.',
+  indexLibrary: 'Private library index',
+  indexDescription: 'Read photo metadata into the local index for faster results.',
+  startIndexing: 'Index my library',
+  resumeIndexing: 'Resume indexing',
+  indexProgress: '{{processed}} of {{total}} items ({{percent}}%)',
+  indexComplete: 'Indexed {{count}} items on this device.',
+  indexPaused: 'Indexing paused after {{count}} items.',
+  indexFailed: 'Indexing could not be completed. Try again.',
   loading: 'Opening your private library…',
   databaseError: 'Your local library could not be opened. Please try again.',
   retry: 'Try again',
@@ -76,10 +106,9 @@ export const en = {
   privacy: 'Your photos stay on your phone. No account. No photo uploads.',
   foundation:
     'Find photos by category and age, open a preview and review your selection.',
-  searchHint: 'Find photos by text, date and category. Coming soon.',
-  cleanHint:
-    'Review every selection before moving anything to trash. Coming soon.',
-  libraryHint: 'Photo library access is not available in this version yet.',
+  searchHint: 'Find photos by text, date and category.',
+  cleanHint: 'Review every selection before moving anything to trash.',
+  libraryHint: 'Use a SelevaAI Development Build to access the device library.',
   language: 'Language',
   english: 'English',
   portuguese: 'Português',
@@ -87,6 +116,17 @@ export const en = {
 };
 export type Messages = { [K in keyof typeof en]: string };
 export const ptBR: Messages = {
+  confirmMoveToTrashTitle: 'Mover para a lixeira?',
+  confirmMoveToTrashMessage: 'Mover {{count}} itens selecionados para a lixeira do dispositivo?',
+  cancel: 'Cancelar',
+  trashSafetyNote: 'VocÃª revisa cada item selecionado antes desta aÃ§Ã£o.',
+  indexedCount: '{{count}} itens disponÃ­veis no Ã­ndice local.',
+  librarySummary: 'Sua biblioteca local',
+  indexedMedia: 'itens indexados',
+  photosCount: '{{count}} fotos',
+  videosCount: '{{count}} vÃ­deos',
+  knownStorage: '{{size}} com tamanho conhecido',
+  openLibrary: 'Abrir biblioteca',
   moveToTrash: 'Mover seleção para a lixeira',
   deletePermanently: 'Excluir permanentemente',
   actionsComingSoon:
@@ -105,6 +145,7 @@ export const ptBR: Messages = {
   findBlurry: 'Encontrar fotos borradas',
   largeVideos: 'Revisar vídeos grandes',
   oldPhotos: 'Encontrar fotos do ano passado',
+  findDuplicates: 'Encontrar fotos duplicadas',
   queryUnavailable:
     'Este filtro exige um dispositivo compatível e o Development Build atualizado do SelevaAI.',
   refreshResults:
@@ -126,8 +167,18 @@ export const ptBR: Messages = {
   durationSeconds: '{{seconds}} segundos',
   screenshotHint:
     'No Android, capturas são identificadas pelo nome do arquivo ou pasta; algumas podem não aparecer ou ser identificadas incorretamente.',
+  largeMediaHint: 'Mostrando mídias indexadas maiores que 500 MB.',
+  analysisFilterHint: 'Usando análise, hashes e OCR local deste dispositivo.',
+  whySelected: 'Por que este item está aqui',
+  reasonScreenshot: 'Captura de tela detectada no dispositivo.',
+  reasonDuplicate: 'Cluster de conteúdo duplicado detectado.',
+  reasonSimilar: 'Cluster de conteúdo visualmente parecido detectado.',
+  reasonBlurry: 'Baixa nitidez detectada.',
+  reasonLargeMedia: 'Arquivo grande.',
+  reasonOldMedia: 'Mais antigo que a data selecionada.',
+  reasonOcr: 'Corresponde ao texto OCR local.',
   reviewOnly:
-    'Revise e selecione os itens desta página. A seleção é reiniciada ao trocar de página ou filtro. Mover para a lixeira ainda não está disponível.',
+    'Revise e selecione os itens desta página. A seleção é reiniciada ao trocar de página ou filtro. Confirme antes de mover qualquer item para a lixeira.',
   previewHint:
     'Prévia local de até 512 pixels. A reprodução de vídeos ainda não está disponível.',
   browseLibrary: 'Explorar suas fotos',
@@ -151,7 +202,15 @@ export const ptBR: Messages = {
   permission_denied: 'Acesso negado. Você pode alterá-lo nos ajustes.',
   permission_restricted: 'O acesso às fotos está restrito pelo dispositivo.',
   indexingPending:
-    'Sua permissão está salva. A indexação estará disponível em uma próxima versão.',
+    'Sua permissão está salva. Use o botão abaixo para criar o índice local.',
+  indexLibrary: 'Índice privado da biblioteca',
+  indexDescription: 'Leia os metadados no índice local para resultados mais rápidos.',
+  startIndexing: 'Indexar minha biblioteca',
+  resumeIndexing: 'Retomar indexação',
+  indexProgress: '{{processed}} de {{total}} itens ({{percent}}%)',
+  indexComplete: '{{count}} itens indexados neste dispositivo.',
+  indexPaused: 'Indexação pausada após {{count}} itens.',
+  indexFailed: 'Não foi possível concluir a indexação. Tente novamente.',
   loading: 'Abrindo sua biblioteca privada…',
   databaseError: 'Não foi possível abrir a biblioteca local. Tente novamente.',
   retry: 'Tentar novamente',
@@ -168,16 +227,26 @@ export const ptBR: Messages = {
   privacy: 'Suas fotos ficam no seu celular. Sem conta. Sem envio de fotos.',
   foundation:
     'Encontre fotos por categoria e idade, abra uma prévia e revise sua seleção.',
-  searchHint: 'Encontre fotos por texto, data e categoria. Em breve.',
-  cleanHint:
-    'Revise cada seleção antes de mover algo para a lixeira. Em breve.',
-  libraryHint: 'O acesso à biblioteca ainda não está disponível nesta versão.',
+  searchHint: 'Encontre fotos por texto, data e categoria.',
+  cleanHint: 'Revise cada seleção antes de mover algo para a lixeira.',
+  libraryHint: 'Use um Development Build do SelevaAI para acessar a biblioteca do dispositivo.',
   language: 'Idioma',
   english: 'English',
   portuguese: 'Português',
   spanish: 'Español',
 };
 export const es: Messages = {
+  confirmMoveToTrashTitle: 'Â¿Mover a la papelera?',
+  confirmMoveToTrashMessage: 'Â¿Mover {{count}} elementos seleccionados a la papelera del dispositivo?',
+  cancel: 'Cancelar',
+  trashSafetyNote: 'Revisas cada elemento seleccionado antes de esta acciÃ³n.',
+  indexedCount: '{{count}} elementos disponibles en el Ã­ndice local.',
+  librarySummary: 'Tu biblioteca local',
+  indexedMedia: 'elementos indexados',
+  photosCount: '{{count}} fotos',
+  videosCount: '{{count}} vÃ­deos',
+  knownStorage: '{{size}} con tamaÃ±o conocido',
+  openLibrary: 'Abrir biblioteca',
   moveToTrash: 'Mover selección a la papelera',
   deletePermanently: 'Eliminar permanentemente',
   actionsComingSoon:
@@ -195,6 +264,7 @@ export const es: Messages = {
   findBlurry: 'Encontrar fotos borrosas',
   largeVideos: 'Revisar vídeos grandes',
   oldPhotos: 'Encontrar fotos del año pasado',
+  findDuplicates: 'Encontrar fotos duplicadas',
   queryUnavailable:
     'Este filtro requiere un dispositivo compatible y el Development Build actualizado de SelevaAI.',
   refreshResults:
@@ -216,8 +286,18 @@ export const es: Messages = {
   durationSeconds: '{{seconds}} segundos',
   screenshotHint:
     'En Android, las capturas se identifican por el nombre del archivo o carpeta y pueden faltar o identificarse incorrectamente.',
+  largeMediaHint: 'Mostrando medios indexados de más de 500 MB.',
+  analysisFilterHint: 'Usando análisis, hashes y OCR local de este dispositivo.',
+  whySelected: 'Por qué aparece este elemento',
+  reasonScreenshot: 'Captura de pantalla detectada en el dispositivo.',
+  reasonDuplicate: 'Se detectó un grupo de contenido duplicado.',
+  reasonSimilar: 'Se detectó un grupo de contenido visualmente similar.',
+  reasonBlurry: 'Baja nitidez detectada.',
+  reasonLargeMedia: 'Archivo grande.',
+  reasonOldMedia: 'Más antiguo que la fecha seleccionada.',
+  reasonOcr: 'Coincide con el texto OCR local.',
   reviewOnly:
-    'Revisa y selecciona los elementos de esta página. La selección se reinicia al cambiar de página o filtro. Mover a la papelera aún no está disponible.',
+    'Revisa y selecciona los elementos de esta página. La selección se reinicia al cambiar de página o filtro. Confirma antes de mover algo a la papelera.',
   previewHint:
     'Vista previa local de hasta 512 píxeles. La reproducción de vídeos aún no está disponible.',
   browseLibrary: 'Explorar tus fotos',
@@ -243,7 +323,15 @@ export const es: Messages = {
   permission_restricted:
     'El acceso a fotos está restringido por el dispositivo.',
   indexingPending:
-    'Tu permiso está guardado. La indexación estará disponible en una próxima versión.',
+    'Tu permiso está guardado. Usa el botón de abajo para crear el índice local.',
+  indexLibrary: 'Índice privado de la biblioteca',
+  indexDescription: 'Lee los metadatos en el índice local para obtener resultados más rápidos.',
+  startIndexing: 'Indexar mi biblioteca',
+  resumeIndexing: 'Reanudar indexación',
+  indexProgress: '{{processed}} de {{total}} elementos ({{percent}}%)',
+  indexComplete: '{{count}} elementos indexados en este dispositivo.',
+  indexPaused: 'Indexación pausada después de {{count}} elementos.',
+  indexFailed: 'No se pudo completar la indexación. Inténtalo de nuevo.',
   loading: 'Abriendo tu biblioteca privada…',
   databaseError: 'No se pudo abrir la biblioteca local. Inténtalo de nuevo.',
   retry: 'Reintentar',
@@ -260,10 +348,9 @@ export const es: Messages = {
   privacy: 'Tus fotos se quedan en tu teléfono. Sin cuenta. Sin subir fotos.',
   foundation:
     'Encuentra fotos por categoría y antigüedad, abre una vista previa y revisa tu selección.',
-  searchHint: 'Encuentra fotos por texto, fecha y categoría. Próximamente.',
-  cleanHint:
-    'Revisa cada selección antes de mover algo a la papelera. Próximamente.',
-  libraryHint: 'El acceso a las fotos aún no está disponible en esta versión.',
+  searchHint: 'Encuentra fotos por texto, fecha y categoría.',
+  cleanHint: 'Revisa cada selección antes de mover algo a la papelera.',
+  libraryHint: 'Usa un Development Build de SelevaAI para acceder a la biblioteca del dispositivo.',
   language: 'Idioma',
   english: 'English',
   portuguese: 'Português',

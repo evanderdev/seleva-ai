@@ -38,7 +38,7 @@ export function FoundationScreen({ screen }: { screen: ScreenName }) {
   return (
     <ScrollView
       contentContainerStyle={styles.content}
-      style={styles.background}
+      style={[styles.background, themeMode === 'dark' && styles.darkBackground]}
     >
       <Text accessibilityRole="header" style={styles.title}>
         {t(screen === 'home' ? 'welcome' : screen)}
@@ -56,7 +56,7 @@ export function FoundationScreen({ screen }: { screen: ScreenName }) {
       )}
       {(screen === 'home' || screen === 'library') && <LibraryPermissionCard />}
       {screen === 'settings' ? (
-        <Card>
+        <Card dark={themeMode === 'dark'}>
           <Text style={styles.subtitle}>{t('appearance')}</Text>
           <Button
             label={t('lightTheme')}
@@ -103,7 +103,7 @@ export function FoundationScreen({ screen }: { screen: ScreenName }) {
           <Text style={styles.body}>{t(descriptions[screen])}</Text>
         </Card>
       )}
-      <Card>
+      <Card dark={themeMode === 'dark'}>
         <Text style={styles.subtitle}>{t('privacyTitle')}</Text>
         <Text style={styles.body}>{t('privacy')}</Text>
       </Card>
@@ -112,6 +112,7 @@ export function FoundationScreen({ screen }: { screen: ScreenName }) {
 }
 const styles = StyleSheet.create({
   background: { backgroundColor: theme.colors.background },
+  darkBackground: { backgroundColor: '#14201D' },
   content: { padding: theme.spacing.lg, gap: theme.spacing.lg },
   title: { fontSize: 32, fontWeight: '700', color: theme.colors.text },
   subtitle: { fontSize: 20, fontWeight: '600', color: theme.colors.text },
