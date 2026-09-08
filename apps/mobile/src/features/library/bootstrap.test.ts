@@ -36,7 +36,9 @@ function setup(permission: PhotoPermission = 'not-determined') {
       return { ok: true, value: current };
     },
   );
-  const scan = jest.fn<Promise<ScanJob>, [ScanCallbacks]>(async () => completed);
+  const scan = jest.fn<Promise<ScanJob>, [ScanCallbacks]>(
+    async () => completed,
+  );
   const getInsights = jest.fn(async () => insights);
   const stop = jest.fn(async () => true);
   const controller = createLibraryBootstrap({

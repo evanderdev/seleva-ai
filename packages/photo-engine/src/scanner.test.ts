@@ -21,9 +21,49 @@ const batch = {
   analyses: [],
 };
 
+it('requires the metadata entry point instead of silently running heavy analysis', async () => {
+  const native: NativeScanTransport = {
+    startScan: jest.fn(),
+    stopScan: jest.fn(),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+  };
+  const scanner = createPhotoScanner(native);
+  expect(
+    await scanner.startScan(
+      'quick',
+      { batchSize: 100, incremental: true },
+      undefined,
+      true,
+    ),
+  ).toEqual({ ok: false, error: 'DEVICE_UNSUPPORTED' });
+  expect(native.startScan).not.toHaveBeenCalled();
+});
+
+it('dispatches metadata scanning and acknowledges committed batches', async () => {
+  const native: NativeScanTransport = {
+    startScan: jest.fn(),
+    startMetadataScan: jest.fn(async () => ({ status: 'completed' })),
+    acknowledgeScanBatch: jest.fn(async () => undefined),
+    stopScan: jest.fn(),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+  };
+  const scanner = createPhotoScanner(native);
+  await scanner.startScan(
+    'quick',
+    { batchSize: 100, incremental: true },
+    undefined,
+    true,
+  );
+  await scanner.acknowledgeBatch('quick');
+  expect(native.startMetadataScan).toHaveBeenCalledWith('quick', 100, null);
+  expect(native.acknowledgeScanBatch).toHaveBeenCalledWith('quick');
+});
+
 it('validates bounded native scan batches', () => {
   expect(parseScanBatch(batch)).toEqual(batch);
-  expect(() => parseScanBatch({ ...batch, assets: new Array(201).fill(batch.assets[0]) })).toThrow();
+  expect(() =>
+    parseScanBatch({ ...batch, assets: new Array(201).fill(batch.assets[0]) }),
+  ).toThrow();
 });
 
 it('forwards scan start and stop requests', async () => {
@@ -33,7 +73,9 @@ it('forwards scan start and stop requests', async () => {
     addListener: jest.fn(() => ({ remove: jest.fn() })),
   };
   const scanner = createPhotoScanner(native);
-  expect(await scanner.startScan('scan-1', { batchSize: 10, incremental: true })).toEqual({
+  expect(
+    await scanner.startScan('scan-1', { batchSize: 10, incremental: true }),
+  ).toEqual({
     ok: true,
     value: { status: 'completed' },
   });

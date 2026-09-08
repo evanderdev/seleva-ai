@@ -33,6 +33,18 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 ## Estado Atual das Features
 
+- [x] Abertura solicita permissão automaticamente e inicia pré-indexação nativa de metadados, seguida de análise dos itens pendentes, com progresso e insights na Home.
+- [x] Estimativa de economia por cópias exatas excedentes, preservando favoritas e uma cópia por hash; tamanhos desconhecidos não geram bytes estimados.
+- [x] Removidos FoundationScreen, cards antigos de gestão e rotas /search e /clean. Permanecem Home, Library e Settings no design system novo.
+
+### Regras da preparação automática
+
+- `LibraryProvider` coordena apenas um scan e pede pausa ao sair do foreground. `startMetadataScan` e `acknowledgeScanBatch` exigem novo Development Build.
+- O scanner aguarda commit SQLite antes de enviar outro lote. Clusters são reconstruídos em SQL, sem carregar todas as análises no JavaScript.
+- Após interrupção, a enumeração reinicia com segurança; retomada eficiente e análise incremental por asset continuam pendentes.
+- PhotoKit ainda não fornece tamanhos de originais nessa leitura; a UI informa quando a estimativa é parcial. Vídeos grandes representam espaço para revisão, não economia garantida.
+- Validação deste incremento: typecheck, lint, 50 testes e APK Android compilado. Swift e performance em biblioteca grande ainda exigem validação nos dispositivos.
+
 - [x] Etapas 1–4: workspace, Expo Router, UI foundation, tema, i18n e contratos de domínio.
 - [x] Etapa 5: SQLite, migration inicial, FTS5, repositórios paginados e testes com SQLite real.
 - [x] Persistência local da preferência de idioma.
