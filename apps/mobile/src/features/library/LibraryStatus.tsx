@@ -189,7 +189,9 @@ export function LibraryStatus() {
             {t(
               error === 'DEVICE_UNSUPPORTED'
                 ? 'libraryHint'
-                : 'permissionError',
+                : error === 'ANALYSIS_PENDING'
+                  ? 'initialPreparationPending'
+                  : 'permissionError',
             )}
           </Text>
           <Button

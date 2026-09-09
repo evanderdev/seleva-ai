@@ -1,8 +1,13 @@
 # Pré-análise e cache local
 
-A Home mostra o resumo e os atalhos de resultados, sem carregar miniaturas da biblioteca.
-O índice e as análises ficam no SQLite; cada lote confirmado já pode ser consultado,
-inclusive se o próximo lote falhar ou se o app for interrompido.
+A abertura mostra uma tela dedicada de preparação antes de montar a navegação.
+Ela informa as etapas de leitura e categorização, com progresso e recuperação de
+permissão/falha. A Home é liberada assim que houver resultados analisados salvos;
+mostra primeiro o resumo e depois o prompt e os filtros, sem miniaturas da biblioteca.
+O índice e as análises ficam no SQLite; cada lote confirmado permanece salvo,
+inclusive se o próximo lote falhar ou se o app for interrompido. Resultados parciais
+liberam a Home enquanto os próximos lotes continuam no foreground. Cache válido
+também libera acesso antes de terminar a análise dos pendentes.
 
 ## Etapas
 
@@ -33,7 +38,8 @@ Não houve migration nem nova dependência neste incremento.
 - A enumeração ainda percorre metadados completos quando necessária; não há cursor
   persistente do PhotoKit entre processos nem observador incremental persistente.
 - A unidade de progresso é um lote de assets, não etapas independentes de OCR/hash/blur.
-  Itens não disponíveis localmente podem continuar pendentes, sinalizados na Home.
+  Itens não disponíveis localmente podem continuar pendentes; nesse caso, a tela de
+  preparação informa o problema e oferece nova tentativa sem apagar o progresso.
 - Os clusters são recalculados em SQL por lote com análise. Medir esse custo e a memória
   em bibliotecas de 30k+ assets continua necessário.
 - `pnpm.cmd lint`, `pnpm.cmd typecheck`, 61 testes Jest e

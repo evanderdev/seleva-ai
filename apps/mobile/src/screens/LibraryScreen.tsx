@@ -53,14 +53,26 @@ export function Thumbnail({
     let active = true;
     setUri(undefined);
     setLoading(true);
+    const timeout = setTimeout(() => {
+      if (active) {
+        active = false;
+        setLoading(false);
+      }
+    }, 20000);
     void libraryReader
       .getThumbnail({ id: asset.id, size: expanded ? 512 : 256 })
       .then((result) => {
         if (!active) return;
+        clearTimeout(timeout);
         if (result.ok) setUri(result.value);
         setLoading(false);
+      })
+      .catch(() => {
+        clearTimeout(timeout);
+        if (active) setLoading(false);
       });
     return () => {
+      clearTimeout(timeout);
       active = false;
     };
   }, [asset.id, expanded]);
@@ -280,7 +292,7 @@ export function LibraryScreen({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t('openPreview')}
-              style={{ flex: 1, borderRadius: 18, overflow: 'hidden' }}
+              style={{ flex: 1 }}
               onPress={() => setPreview(item)}
             >
               <Thumbnail asset={item} />
@@ -325,6 +337,7 @@ export function LibraryScreen({
             </Pressable>
           </View>
         )}
+        removeClippedSubviews={false}
         initialNumToRender={12}
         maxToRenderPerBatch={6}
         windowSize={3}

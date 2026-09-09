@@ -20,6 +20,7 @@ export interface LibraryState {
   insights?: LibraryInsights;
   error?: string;
   revision: number;
+  resultsAvailable: boolean;
 }
 interface Dependencies {
   repository: Pick<
@@ -43,7 +44,11 @@ const cacheLifetime = 6 * 60 * 60 * 1000;
 
 /** One foreground coordinator shared by every route. No asset datasets in state. */
 export function createLibraryBootstrap(deps: Dependencies) {
-  let state: LibraryState = { phase: 'opening', revision: 0 };
+  let state: LibraryState = {
+    phase: 'opening',
+    revision: 0,
+    resultsAvailable: false,
+  };
   const listeners = new Set<() => void>();
   let active = true;
   let running: Promise<void> | undefined;
@@ -65,7 +70,14 @@ export function createLibraryBootstrap(deps: Dependencies) {
     }
     refresh = deps.repository
       .getInsights()
-      .then((insights) => publish({ insights, revision: state.revision + 1 }))
+      .then((insights) =>
+        publish({
+          insights,
+          revision: state.revision + 1,
+          resultsAvailable:
+            state.resultsAvailable || insights.total > insights.pending,
+        }),
+      )
       .finally(() => {
         refresh = undefined;
       });
@@ -85,7 +97,12 @@ export function createLibraryBootstrap(deps: Dependencies) {
         permission = await deps.access.requestPermission();
       }
       if (!permission.ok) {
-        publish({ phase: 'error', error: permission.error });
+        publish({
+          phase: 'error',
+          error: permission.error,
+          resultsAvailable: false,
+          permission: undefined,
+        });
         return;
       }
       const previous = state.permission;
@@ -97,6 +114,7 @@ export function createLibraryBootstrap(deps: Dependencies) {
         publish({
           phase: 'permission',
           insights: undefined,
+          resultsAvailable: false,
           revision: state.revision + 1,
         });
         return;
@@ -187,8 +205,12 @@ export function createLibraryBootstrap(deps: Dependencies) {
           );
         }
       }
-      completed = true;
       await updateInsights(true);
+      if (state.insights?.pending) {
+        publish({ phase: 'error', error: 'ANALYSIS_PENDING' });
+        return;
+      }
+      completed = true;
       publish({ phase: 'ready' });
     } catch {
       publish({ phase: 'error', error: 'UNKNOWN' });

@@ -37,7 +37,11 @@ function setup(permission: PhotoPermission = 'not-determined', saved?: string) {
     },
   );
   const scan = jest.fn<Promise<ScanJob>, [ScanCallbacks]>(
-    async () => completed,
+    async ({ metadataOnly }) => {
+      if (!metadataOnly)
+        getInsights.mockResolvedValue({ ...insights, pending: 0 });
+      return completed;
+    },
   );
   const getInsights = jest.fn(async () => insights);
   const preferences = new Map<string, string>(
@@ -174,4 +178,81 @@ it('reconciles limited access even when the persisted cache is fresh', async () 
   );
   await controller.start();
   expect(scan.mock.calls[0]?.[0].metadataOnly).toBe(true);
+});
+
+it('does not release Home while native work is running or pending items remain', async () => {
+  const { controller, scan } = setup('authorized');
+  let finish: ((job: ScanJob) => void) | undefined;
+  scan.mockImplementation(({ metadataOnly }) =>
+    metadataOnly
+      ? Promise.resolve(completed)
+      : new Promise((resolve) => {
+          finish = resolve;
+        }),
+  );
+  const work = controller.start();
+  for (let i = 0; i < 30 && !finish; i++) await Promise.resolve();
+  expect(controller.getSnapshot().phase).toBe('analysis');
+  expect(finish).toBeDefined();
+  finish?.(completed);
+  await work;
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'error',
+    error: 'ANALYSIS_PENDING',
+  });
+});
+it('opens Home after a successful analysis finishes and persists its results', async () => {
+  const { controller } = setup('authorized');
+  const phases: string[] = [];
+  controller.subscribe(() => phases.push(controller.getSnapshot().phase));
+  await controller.start();
+  expect(phases).toContain('metadata');
+  expect(phases).toContain('analysis');
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'ready',
+    insights: { pending: 0 },
+  });
+});
+
+it('releases saved batches during analysis and keeps them available after a later failure', async () => {
+  const { controller, scan, getInsights } = setup('authorized');
+  let finish: ((job: ScanJob) => void) | undefined;
+  let committed: (() => void) | undefined;
+  scan.mockImplementation((options) =>
+    options.metadataOnly
+      ? Promise.resolve(completed)
+      : new Promise((resolve) => {
+          finish = resolve;
+          committed = options.onCommitted;
+        }),
+  );
+  const work = controller.start();
+  for (let i = 0; i < 40 && !finish; i++) await Promise.resolve();
+  expect(controller.getSnapshot().resultsAvailable).toBe(false);
+  getInsights.mockResolvedValue({ ...insights, pending: 2 });
+  committed?.();
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'analysis',
+    resultsAvailable: true,
+  });
+  finish?.({ ...completed, status: 'failed' });
+  await work;
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'error',
+    resultsAvailable: true,
+  });
+});
+it('makes cached analyzed items available before resuming remaining work', async () => {
+  const { controller, scan, getInsights } = setup(
+    'authorized',
+    JSON.stringify({ completedAt: Date.now(), permission: 'authorized' }),
+  );
+  getInsights.mockResolvedValue({ ...insights, pending: 2 });
+  scan.mockImplementation(async () => {
+    expect(controller.getSnapshot().resultsAvailable).toBe(true);
+    return { ...completed, status: 'failed' };
+  });
+  await controller.start();
+  expect(scan.mock.calls[0]?.[0].metadataOnly).toBe(false);
 });

@@ -9,10 +9,19 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
+import java.util.concurrent.Executors
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
 class SelevaPhotoEngineModule : Module() {
+  private val scanDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+  private val thumbnailDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+  private val scanScope = CoroutineScope(SupervisorJob() + scanDispatcher)
+  private val thumbnailScope = CoroutineScope(SupervisorJob() + thumbnailDispatcher)
   private var libraryService: PhotoLibraryService? = null
   private val scanAcks = ConcurrentHashMap<String, java.util.concurrent.Semaphore>()
   private val scanSelections = ConcurrentHashMap<String, Set<String>>()
@@ -134,6 +143,14 @@ class SelevaPhotoEngineModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("SelevaPhotoEngine")
+    OnDestroy {
+      scanStops.values.forEach { it.set("cancelled") }
+      scanAcks.values.forEach { it.release() }
+      scanScope.cancel()
+      thumbnailScope.cancel()
+      scanDispatcher.close()
+      thumbnailDispatcher.close()
+    }
     Events("scanBatch", "scanProgress", "scanCompleted", "scanFailed", "scanPaused", "scanCancelled")
     AsyncFunction("queryAssets") { limit: Int, cursor: String?, category: String, before: Double?, promise: Promise ->
       libraryOperation(promise) { it.listAssets(limit, cursor, category, before) }
@@ -143,19 +160,19 @@ class SelevaPhotoEngineModule : Module() {
     }
     AsyncFunction("getThumbnail") { id: String, size: Int, promise: Promise ->
       libraryOperation(promise) { it.thumbnail(id, size) }
-    }
+    }.runOnQueue(thumbnailScope)
     AsyncFunction("trashAssets") { ids: List<String>, promise: Promise ->
       libraryOperation(promise) { it.trashAssets(ids) }
     }
 
-    AsyncFunction("startScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, false, promise) }
-    AsyncFunction("startIncrementalScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, false, promise, true) }
+    AsyncFunction("startScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, false, promise) }.runOnQueue(scanScope)
+    AsyncFunction("startIncrementalScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, false, promise, true) }.runOnQueue(scanScope)
     AsyncFunction("selectScanAssets") { jobId: String, ids: List<String> ->
       require(ids.size <= 200 && ids.all { it.isNotBlank() })
       if (scanAcks.containsKey(jobId)) { scanSelections[jobId] = ids.toSet(); scanAcks[jobId]?.release() }
       Unit
     }.runOnQueue(Queues.MAIN)
-    AsyncFunction("startMetadataScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, true, promise) }
+    AsyncFunction("startMetadataScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, true, promise) }.runOnQueue(scanScope)
 
     AsyncFunction("acknowledgeScanBatch") { jobId: String -> scanAcks[jobId]?.release(); Unit }.runOnQueue(Queues.MAIN)
 

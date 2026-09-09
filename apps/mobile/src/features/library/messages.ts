@@ -1,5 +1,13 @@
 export const libraryEn = {
   preanalysisSummary: 'Pre-analysis summary',
+  initialPreparationTitle: 'Preparing your photo summary',
+  initialPreparationHint:
+    'We are preparing the first results. Each analyzed batch becomes available while the next ones continue. Saved analysis is reused.',
+  initialPreparationPending:
+    'Some items could not be analyzed. Your progress is saved. Try again to finish preparing your library.',
+  initialCacheStep: 'Checking saved analysis',
+  initialMetadataStep: 'Step 1 of 2 · Reading your library',
+  initialAnalysisStep: 'Step 2 of 2 · Analyzing and categorizing',
   scanPartial: 'Saved results available; some items are still pending',
   metadataAvailable: '{{count}} items in the index',
   analysisAvailable: '{{count}} analyzed · {{pending}} pending',
@@ -29,6 +37,14 @@ export const libraryEn = {
 };
 export const libraryPt: Record<keyof typeof libraryEn, string> = {
   preanalysisSummary: 'Resumo da pré-análise',
+  initialPreparationTitle: 'Preparando o resumo das suas fotos',
+  initialPreparationHint:
+    'Estamos preparando os primeiros resultados. Cada lote analisado fica disponível enquanto os próximos continuam. Análises salvas são reaproveitadas.',
+  initialPreparationPending:
+    'Alguns itens não puderam ser analisados. Seu progresso está salvo. Tente novamente para concluir a preparação.',
+  initialCacheStep: 'Verificando análises salvas',
+  initialMetadataStep: 'Etapa 1 de 2 · Lendo sua biblioteca',
+  initialAnalysisStep: 'Etapa 2 de 2 · Analisando e categorizando',
   scanPartial:
     'Resultados salvos disponíveis; alguns itens ainda estão pendentes',
   metadataAvailable: '{{count}} itens no índice',
@@ -61,6 +77,14 @@ export const libraryPt: Record<keyof typeof libraryEn, string> = {
 };
 export const libraryEs: Record<keyof typeof libraryEn, string> = {
   preanalysisSummary: 'Resumen del análisis previo',
+  initialPreparationTitle: 'Preparando el resumen de tus fotos',
+  initialPreparationHint:
+    'Estamos preparando los primeros resultados. Cada lote analizado queda disponible mientras continúan los siguientes. Reutilizamos los análisis guardados.',
+  initialPreparationPending:
+    'No se pudieron analizar algunos elementos. Tu progreso está guardado. Inténtalo de nuevo para terminar la preparación.',
+  initialCacheStep: 'Comprobando análisis guardados',
+  initialMetadataStep: 'Paso 1 de 2 · Leyendo tu biblioteca',
+  initialAnalysisStep: 'Paso 2 de 2 · Analizando y clasificando',
   scanPartial:
     'Resultados guardados disponibles; algunos elementos siguen pendientes',
   metadataAvailable: '{{count}} elementos en el índice',

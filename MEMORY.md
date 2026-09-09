@@ -8,6 +8,9 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 ## ⚠️ Regras Estritas
 
+- A abertura passa por `PreparationScreen` até existir análise salva (ou biblioteca vazia concluída). `resultsAvailable` libera navegação independentemente da fase do scanner; lotes seguintes, pausa e falha não desmontam a galeria. Permissão revogada bloqueia novamente. Cache de análises também libera acesso ao reabrir.
+- Android: scanner e thumbnails usam filas seriais próprias, fora da fila padrão Expo. Nunca bloquear a fila Expo esperando confirmação JS/SQLite de um lote. A galeria usa `removeClippedSubviews=false` e evita recorte arredondado no contêiner de cada miniatura, como mitigação do crash `libhwui/ClipStack::restore` observado no aparelho.
+
 - Pré-análise preserva os lotes já confirmados no SQLite. Antes de analisar um lote nativo, consultar os IDs pendentes por `modified_at`, `analysis_version` e `model_version`; nunca reanalisar itens com cache válido só porque outro item está pendente.
 - A conclusão da etapa de metadados fica em `user_preferences` (`library-metadata-v1`), com validade de seis horas e escopo de permissão. Atualização manual invalida essa conclusão, sem apagar análises. Acesso limitado exige reconciliação ao reabrir. Mudanças na galeria dentro desse intervalo exigem atualização manual; observadores incrementais persistentes continuam pendentes.
 - `startIncrementalScan` e `selectScanAssets` exigem novo Development Build. Cada lote espera a seleção de pendentes e depois a confirmação de persistência; clusters são publicados por lote em transação SQL. Versões dos algoritmos nativos e do predicado de cache devem mudar juntas.
@@ -37,10 +40,12 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 ## Estado Atual das Features
 
+- [x] Loading inicial dedicado com leitura/categorização e progresso; Home posterior com resumo antes do prompt e dos filtros. Traduções en/pt-BR/es, typecheck, lint e 63 testes. Validação visual em aparelho pendente.
+
 - [x] Home sem miniaturas de galeria, com resumo de metadados, análises concluídas e pendentes; resultados salvos ficam disponíveis durante os lotes seguintes.
 - [x] Cache persistente da preparação, reutilização de análises por asset e retomada dos pendentes após reabrir. Validação: lint, typecheck, 61 testes e build Android arm64; dispositivo/iOS ainda pendentes.
 
-- [x] Abertura solicita permissão automaticamente e inicia pré-indexação nativa de metadados, seguida de análise dos itens pendentes, com progresso e insights na Home.
+- [x] Abertura solicita permissão automaticamente, indexa metadados e analisa pendentes; Home liberada por resultados persistidos, mantendo o scan em foreground.
 - [x] Estimativa de economia por cópias exatas excedentes, preservando favoritas e uma cópia por hash; tamanhos desconhecidos não geram bytes estimados.
 - [x] Removidos FoundationScreen, cards antigos de gestão e rotas /search e /clean. Permanecem Home, Library e Settings no design system novo.
 

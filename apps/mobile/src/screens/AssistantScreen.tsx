@@ -95,6 +95,7 @@ export function AssistantScreen() {
         <Text style={[layout.title, { color: colors.text, marginBottom: 38 }]}>
           {t('greeting')}
         </Text>
+        <LibraryStatus />
         <Text
           style={[layout.eyebrow, { color: colors.muted, marginBottom: 10 }]}
         >
@@ -225,7 +226,6 @@ export function AssistantScreen() {
             </Pressable>
           ))}
         </ScrollView>
-        <LibraryStatus />
         <View style={{ flex: 1, minHeight: 64 }} />
         <View style={[layout.row, { gap: 8, paddingTop: 20 }]}>
           <Icon name="lock" size={14} />

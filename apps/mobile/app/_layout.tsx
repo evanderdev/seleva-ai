@@ -1,4 +1,6 @@
-﻿import { LibraryProvider } from '../src/features/library/LibraryProvider';
+import { LibraryProvider } from '../src/features/library/LibraryProvider';
+import { useLibrary } from '../src/features/library/LibraryProvider';
+import { PreparationScreen } from '../src/screens/PreparationScreen';
 import { Stack } from 'expo-router';
 import { I18nextProvider } from 'react-i18next';
 import { StatusBar } from 'expo-status-bar';
@@ -8,6 +10,12 @@ import { DatabaseProvider } from '../src/services/database';
 import { usePreferences } from '../src/stores/preferences';
 function Navigation() {
   const colors = useTheme();
+  const { phase, permission, resultsAvailable } = useLibrary();
+  if (
+    !['authorized', 'limited'].includes(permission ?? '') ||
+    (phase !== 'ready' && !resultsAvailable)
+  )
+    return <PreparationScreen />;
   return (
     <Stack
       screenOptions={{
