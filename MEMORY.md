@@ -8,12 +8,20 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 ## ⚠️ Regras Estritas
 
+- SQLite/FTS (2026-09-08): abrir `seleva.db` com `finalizeUnusedStatementsBeforeClosing: false`, opção herdada pelas transações exclusivas. A limpeza automática do Expo SQLite pode finalizar statements internos do FTS duas vezes ao fechar a conexão, causando corrupção de memória/SIGSEGV (Expo #38168). `runAsync`/`getAllAsync` já finalizam seus statements; uso futuro de `prepareAsync` exige `finally`. Preservar APIs assíncronas e ACK após commit. Ver `docs/database.md`.
+
+- Pipeline progressivo (2026-09-08): metadata -> fast -> deep. `startFastScan` exige novo Development Build, sem fallback para OCR. Metadados persistidos liberam a Home; `analysisStage` distingue fast/deep.
+- Cache: `android-fast-1`/`ios-fast-1` satisfazem somente fast. As versoes completas v1 satisfazem ambas as etapas. `fastPending` e `pending` contam pendentes rapidos e completos separadamente. Sem migration.
+- Esta regra substitui a fila de analise serial descrita abaixo: fast usa ate 3 thumbnails simultaneos e deep usa 1; lotes de analise ate 20. OCR e SHA-256 ficam somente em deep. Pausa drena tarefas em andamento sem interromper ML Kit.
+- Clusters globais: no maximo uma atualizacao a cada 5 segundos durante lotes, mais atualizacao terminal. ACK continua depois do commit SQLite. Thumbnail indisponivel nao deve marcar analise como concluida.
+
+
 - Prioridade atual: Android; iOS fica para depois, conforme orientação do usuário.
-- Android: `PhotoScanRunner` coordena lotes/ACKs, `PhotoAnalyzer` executa OCR/hashes/qualidade, `PhotoThumbnailStore` cuida das miniaturas e `PhotoLibraryService` do MediaStore. `PhotoWorker` mantém filas seriais separadas para scan (prioridade background), miniaturas e consultas. Análise limitada a 20 assets por lote, um bitmap/OCR por vez e um reconhecedor por lote. No teardown, suprimir eventos, liberar ACK e terminar o asset em andamento sem interromper ML Kit enquanto usa o bitmap.
+- Android: `PhotoScanRunner` coordena lotes/ACKs, `PhotoAnalyzer` executa OCR/hashes/qualidade, `PhotoThumbnailStore` cuida das miniaturas e `PhotoLibraryService` do MediaStore. `PhotoWorker` mantém filas seriais separadas para scan (prioridade background), miniaturas e consultas. Analise limitada a 20 assets por lote, ate 3 bitmaps em fast, um bitmap/OCR em deep e um reconhecedor por lote deep. No teardown, suprimir eventos, liberar ACK e terminar o asset em andamento sem interromper ML Kit enquanto usa o bitmap.
 - Insights durante scan são coalescidos e limitados a uma atualização por segundo após liberar resultados; transições finais sempre atualizam. SQLite mantém o fluxo assíncrono existente e ACK depois do commit.
 - A galeria Android usa componentes memoizados (`Thumbnail` e `LibraryGridItem`), `renderItem` estável e `Set` memoizado para seleção. Itens da `FlatList` não devem receber callbacks ou objetos recriados a cada render; mudanças de seleção devem limitar o render às células afetadas.
 
-- A abertura passa por `PreparationScreen` até existir análise salva (ou biblioteca vazia concluída). `resultsAvailable` libera navegação independentemente da fase do scanner; lotes seguintes, pausa e falha não desmontam a galeria. Permissão revogada bloqueia novamente. Cache de análises também libera acesso ao reabrir.
+- A abertura passa por `PreparationScreen` até existir metadata salva (ou biblioteca vazia concluída). `resultsAvailable` libera navegação independentemente da fase do scanner; lotes seguintes, pausa e falha não desmontam a galeria. Permissão revogada bloqueia novamente. Cache de análises também libera acesso ao reabrir.
 - Android: scanner e thumbnails usam filas seriais próprias, fora da fila padrão Expo. Nunca bloquear a fila Expo esperando confirmação JS/SQLite de um lote. A galeria usa `removeClippedSubviews=false` e evita recorte arredondado no contêiner de cada miniatura, como mitigação do crash `libhwui/ClipStack::restore` observado no aparelho.
 
 - Pré-análise preserva os lotes já confirmados no SQLite. Antes de analisar um lote nativo, consultar os IDs pendentes por `modified_at`, `analysis_version` e `model_version`; nunca reanalisar itens com cache válido só porque outro item está pendente.
@@ -44,6 +52,9 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - Resultados mostram contagem e seleção da página (até 60 itens), sem apresentar essa contagem como total global. Prévia e confirmação do SO continuam obrigatórias para lixeira.
 
 ## Estado Atual das Features
+
+- [x] Pipeline fast/deep, cache por etapa, resultados de metadata progressivos e labels en/pt-BR/es. Instrumentacao agregada Android/JS, sem dados pessoais. Ver docs/scan-pipeline.md para validacao e limites.
+
 
 - [x] Modularização Android e isolamento das filas nativas; liberação de bitmaps em falhas OCR e proteção quando a imagem redimensionada é a própria origem. Lint, typecheck, 66 testes Jest, 2 testes JVM e APK arm64 passaram. APK instalado e app aberto no aparelho; estabilidade prolongada/30k+ assets ainda pendente.
 - [x] Primeira extração da UI da galeria: thumbnail e célula virtualizada isolados em componentes memoizados, com callbacks estáveis e seleção em `Set`. Typecheck, lint e 66 testes passaram.

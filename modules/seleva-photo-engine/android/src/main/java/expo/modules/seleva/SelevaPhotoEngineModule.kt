@@ -70,6 +70,7 @@ class SelevaPhotoEngineModule : Module() {
     }.runOnQueue(libraryWorker.scope)
 
     AsyncFunction("startScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scanner.scan(appContext.reactContext, jobId, batchSize, cursor, false, promise) }.runOnQueue(scanWorker.scope)
+    AsyncFunction("startFastScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scanner.scan(appContext.reactContext, jobId, batchSize, cursor, false, promise, true, true) }.runOnQueue(scanWorker.scope)
     AsyncFunction("startIncrementalScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scanner.scan(appContext.reactContext, jobId, batchSize, cursor, false, promise, true) }.runOnQueue(scanWorker.scope)
     AsyncFunction("selectScanAssets") { jobId: String, ids: List<String> ->
       scanner.select(jobId, ids)

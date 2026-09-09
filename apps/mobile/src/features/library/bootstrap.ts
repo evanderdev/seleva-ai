@@ -16,6 +16,7 @@ export interface LibraryState {
     | 'ready'
     | 'paused'
     | 'error';
+  analysisStage?: 'fast' | 'deep';
   job?: ScanJob;
   insights?: LibraryInsights;
   error?: string;
@@ -78,8 +79,7 @@ export function createLibraryBootstrap(deps: Dependencies) {
         publish({
           insights,
           revision: state.revision + 1,
-          resultsAvailable:
-            state.resultsAvailable || insights.total > insights.pending,
+          resultsAvailable: state.resultsAvailable || insights.total > 0,
         });
       })
       .finally(() => {
@@ -123,7 +123,11 @@ export function createLibraryBootstrap(deps: Dependencies) {
         });
         return;
       }
-      if (previous && previous !== permission.value) {
+      // Limited selections can change in Settings without changing the permission enum.
+      if (
+        permission.value === 'limited' ||
+        (previous && previous !== permission.value)
+      ) {
         metadataDone = false;
         completed = false;
       }
@@ -159,7 +163,10 @@ export function createLibraryBootstrap(deps: Dependencies) {
         publish({ phase: 'ready' });
         return;
       }
-      for (const metadataOnly of metadataDone ? [false] : [true, false]) {
+      for (const stage of metadataDone
+        ? ['fast', 'deep']
+        : ['metadata', 'fast', 'deep']) {
+        const metadataOnly = stage === 'metadata';
         if (!active) {
           publish({ phase: 'paused' });
           return;
@@ -172,11 +179,18 @@ export function createLibraryBootstrap(deps: Dependencies) {
         if (metadataOnly) await deps.repository.setPreference(cacheKey, '');
         publish({
           phase: metadataOnly ? 'metadata' : 'analysis',
+          analysisStage:
+            stage === 'metadata'
+              ? undefined
+              : stage === 'fast'
+                ? 'fast'
+                : 'deep',
           job: undefined,
           error: undefined,
         });
         const job = await deps.scan({
           metadataOnly,
+          fastOnly: stage === 'fast',
           onProgress: (job) => {
             publish({ job });
             if (!active) void deps.stop(job.id);
@@ -210,6 +224,14 @@ export function createLibraryBootstrap(deps: Dependencies) {
       await updateInsights(true);
       if (state.insights?.pending) {
         publish({ phase: 'error', error: 'ANALYSIS_PENDING' });
+        return;
+      }
+      if (permission.value === 'limited' && state.insights?.total === 0) {
+        publish({
+          phase: 'permission',
+          error: 'LIMITED_ACCESS_EMPTY',
+          resultsAvailable: false,
+        });
         return;
       }
       completed = true;

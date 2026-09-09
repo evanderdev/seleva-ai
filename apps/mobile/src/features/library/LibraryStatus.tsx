@@ -22,8 +22,16 @@ export function formatStorage(bytes: number, locale: string) {
 export function LibraryStatus() {
   const { t, i18n } = useTranslation();
   const colors = useTheme();
-  const { phase, permission, job, insights, error, retry, refresh } =
-    useLibrary();
+  const {
+    phase,
+    analysisStage,
+    permission,
+    job,
+    insights,
+    error,
+    retry,
+    refresh,
+  } = useLibrary();
   const busy = ['opening', 'metadata', 'analysis'].includes(phase);
   const denied = phase === 'permission';
   return (
@@ -54,7 +62,9 @@ export function LibraryStatus() {
                   : phase === 'paused'
                     ? 'scanPaused'
                     : phase === 'analysis'
-                      ? 'analyzingLibrary'
+                      ? analysisStage === 'deep'
+                        ? 'deepAnalysis'
+                        : 'fastAnalysis'
                       : 'preparingLibrary',
           )}
         </Text>
@@ -108,8 +118,8 @@ export function LibraryStatus() {
             {t('metadataAvailable', { count: insights.total })}
           </Text>
           <Text style={{ color: colors.muted, fontSize: 12 }}>
-            {t('analysisAvailable', {
-              count: Math.max(0, insights.total - insights.pending),
+            {t('stagedAnalysisAvailable', {
+              count: Math.max(0, insights.total - insights.fastPending),
               pending: insights.pending,
             })}
           </Text>
@@ -175,7 +185,7 @@ export function LibraryStatus() {
           onPress={() => void refresh()}
         />
       )}
-      {denied && (
+      {(denied || permission === 'limited') && (
         <Button
           label={t('openSettings')}
           onPress={() => {

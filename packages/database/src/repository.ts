@@ -36,10 +36,16 @@ interface ScanJobRow {
   updated_at: number;
   error: string | null;
 }
-// Bump alongside the native algorithms when their output changes.
-const pendingAnalysis = `(a.photo_id IS NULL OR a.analyzed_at < COALESCE(p.modified_at,0)
-  OR a.analysis_version != 1 OR COALESCE(a.model_version,'') !=
-    CASE WHEN p.id LIKE 'ios:%' THEN 'ios-vision-1' ELSE 'android-heuristic-1' END)`;
+// Complete v1 analyses also satisfy the fast stage. Fast-only rows never satisfy deep work.
+function pendingForStage(fastOnly = false): string {
+  const complete =
+    "CASE WHEN p.id LIKE 'ios:%' THEN 'ios-vision-1' ELSE 'android-heuristic-1' END";
+  const fast =
+    "CASE WHEN p.id LIKE 'ios:%' THEN 'ios-fast-1' ELSE 'android-fast-1' END";
+  return `(a.photo_id IS NULL OR a.analyzed_at < COALESCE(p.modified_at,0)
+    OR a.analysis_version != 1 OR COALESCE(a.model_version,'') NOT IN (${complete}${fastOnly ? `,${fast}` : ''}))`;
+}
+const pendingAnalysis = pendingForStage();
 
 export class PhotoRepository {
   constructor(private readonly db: SqlDatabase) {}
@@ -50,6 +56,7 @@ export class PhotoRepository {
       knownBytes: number;
       unknownSizes: number;
       pending: number;
+      fastPending: number;
       screenshots: number;
       blurry: number;
       largeVideos: number;
@@ -57,6 +64,7 @@ export class PhotoRepository {
     }>(`SELECT COUNT(*) AS total, COALESCE(SUM(p.file_size),0) AS knownBytes,
       COALESCE(SUM(p.file_size IS NULL),0) AS unknownSizes,
       COALESCE(SUM(${pendingAnalysis}),0) AS pending,
+      COALESCE(SUM(${pendingForStage(true)}),0) AS fastPending,
       COALESCE(SUM(a.is_screenshot = 1),0) AS screenshots,
       COALESCE(SUM(a.blur_score >= 0.55),0) AS blurry,
       COALESCE(SUM(p.media_type = 'video' AND p.file_size >= 524288000),0) AS largeVideos,
@@ -82,6 +90,7 @@ export class PhotoRepository {
         knownBytes: 0,
         unknownSizes: 0,
         pending: 0,
+        fastPending: 0,
         screenshots: 0,
         blurry: 0,
         largeVideos: 0,
@@ -91,12 +100,15 @@ export class PhotoRepository {
     };
   }
 
-  async getPendingAnalysisIds(ids: string[]): Promise<string[]> {
+  async getPendingAnalysisIds(
+    ids: string[],
+    fastOnly = false,
+  ): Promise<string[]> {
     if (!ids.length) return [];
     if (ids.length > 200) throw new Error('INVALID_BATCH_SIZE');
     const rows = await this.db.getAllAsync<{ id: string }>(
       `SELECT p.id FROM photos p LEFT JOIN photo_analysis a ON a.photo_id=p.id
-       WHERE p.id IN (${ids.map(() => '?').join(',')}) AND ${pendingAnalysis}`,
+       WHERE p.id IN (${ids.map(() => '?').join(',')}) AND ${pendingForStage(fastOnly)}`,
       ...ids,
     );
     return rows.map((row) => row.id);

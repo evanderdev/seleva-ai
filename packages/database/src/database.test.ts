@@ -374,3 +374,40 @@ it('selects only new, changed and outdated analyses in a bounded batch', async (
     ),
   ).rejects.toThrow('INVALID_BATCH_SIZE');
 });
+
+it.each(['android', 'ios'])(
+  'persists separate fast/deep cache validity for %s',
+  async (platform) => {
+    const id = `${platform}:1:p`;
+    await photo(id);
+    await repository.upsertAnalyses([
+      {
+        photoId: id,
+        analysisVersion: 1,
+        modelVersion: `${platform}-fast-1`,
+        analyzedAt: Date.now(),
+        blurScore: 0.7,
+      },
+    ]);
+    expect(await repository.getPendingAnalysisIds([id], true)).toEqual([]);
+    expect(await repository.getPendingAnalysisIds([id])).toEqual([id]);
+    await repository.upsertAnalyses([
+      {
+        photoId: id,
+        analysisVersion: 1,
+        modelVersion:
+          platform === 'ios' ? 'ios-vision-1' : 'android-heuristic-1',
+        analyzedAt: Date.now(),
+        ocrText: 'receipt',
+      },
+    ]);
+    expect(await repository.getPendingAnalysisIds([id], true)).toEqual([]);
+    expect(await repository.getPendingAnalysisIds([id])).toEqual([]);
+    await db.runAsync(
+      'UPDATE photos SET modified_at=? WHERE id=?',
+      Date.now() + 1000,
+      id,
+    );
+    expect(await repository.getPendingAnalysisIds([id], true)).toEqual([id]);
+  },
+);

@@ -105,3 +105,25 @@ it('refuses an older native engine that would ignore the analysis cache', async 
   ).toEqual({ ok: false, error: 'DEVICE_UNSUPPORTED' });
   expect(native.startScan).not.toHaveBeenCalled();
 });
+
+it('requires the fast API and never falls back to full OCR', async () => {
+  const native: NativeScanTransport = {
+    startScan: jest.fn(),
+    startIncrementalScan: jest.fn(),
+    selectScanAssets: jest.fn(),
+    acknowledgeScanBatch: jest.fn(),
+    stopScan: jest.fn(),
+    addListener: jest.fn(),
+  };
+  const scanner = createPhotoScanner(native);
+  const options = { batchSize: 20, incremental: true };
+  expect(
+    await scanner.startScan('fast', options, undefined, false, true),
+  ).toEqual({ ok: false, error: 'DEVICE_UNSUPPORTED' });
+  expect(native.startIncrementalScan).not.toHaveBeenCalled();
+  native.startFastScan = jest.fn();
+  expect(
+    (await scanner.startScan('fast', options, undefined, false, true)).ok,
+  ).toBe(true);
+  expect(native.startFastScan).toHaveBeenCalledWith('fast', 20, null);
+});

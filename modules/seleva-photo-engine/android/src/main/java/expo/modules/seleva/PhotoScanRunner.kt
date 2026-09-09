@@ -36,7 +36,7 @@ internal class PhotoScanRunner(
   fun acknowledge(jobId: String) { scanAcks[jobId]?.release() }
   fun stop(jobId: String, mode: String) { scanStops[jobId]?.set(mode) }
 
-  fun scan(context: Context?, jobId: String, batchSize: Int, cursor: String?, metadataOnly: Boolean, promise: Promise, incremental: Boolean = false) {
+  fun scan(context: Context?, jobId: String, batchSize: Int, cursor: String?, metadataOnly: Boolean, promise: Promise, incremental: Boolean = false, fastOnly: Boolean = false) {
       if (destroyed) return
       if (context == null) {
         promise.reject("DEVICE_UNSUPPORTED", "Context unavailable", null)
@@ -54,17 +54,19 @@ internal class PhotoScanRunner(
       scanStops[jobId] = stop
       val ack = java.util.concurrent.Semaphore(0)
       scanAcks[jobId] = ack
+      val profile = ScanProfile(context, if (metadataOnly) "discovery" else if (fastOnly) "fastQueue" else "deepQueue")
       try {
         val service = PhotoLibraryService(context)
-        val total = service.countAssets()
+        val total = profile.measure("discovery") { service.countAssets() }
         var processed = 0
         var nextCursor = cursor
         while (true) {
           if (destroyed) return
-          val page = service.listAssets(if (metadataOnly) batchSize else minOf(batchSize, 20), nextCursor)
+          val page = profile.measure("metadata") { service.listAssets(if (metadataOnly) batchSize else minOf(batchSize, 20), nextCursor) }
           @Suppress("UNCHECKED_CAST")
           val assets = page["assets"] as? List<Map<String, Any>> ?: emptyList()
           val pageCursor = page["nextCursor"] as? String
+          assets.forEach { profile.count(if (it["mediaType"] == "video") "videos" else "photos") }
           var selected = assets
           if (incremental) {
             emit("scanBatch", mapOf("jobId" to jobId, "assets" to assets,
@@ -75,7 +77,8 @@ internal class PhotoScanRunner(
             val ids = scanSelections.remove(jobId) ?: emptySet()
             selected = if (stop.get() == null) assets.filter { it["id"] in ids } else emptyList()
           }
-          val analyses = if (metadataOnly) emptyList<Map<String, Any>>() else PhotoAnalyzer(context).analyzeAssets(selected) { destroyed }
+          repeat(assets.size - selected.size) { profile.count("cachedOrStopped") }
+          val analyses = if (metadataOnly) emptyList<Map<String, Any>>() else PhotoAnalyzer(context).analyzeAssets(selected, fastOnly) { destroyed || stop.get() != null }
           if (destroyed) return
           processed += assets.size
           emit("scanBatch", mapOf(
@@ -120,6 +123,7 @@ internal class PhotoScanRunner(
         emit("scanFailed", mapOf("jobId" to jobId, "error" to "UNKNOWN"))
         promise.reject("UNKNOWN", "Library scan failed", null)
       } finally {
+        profile.finish()
         scanStops.remove(jobId)
         scanAcks.remove(jobId)
         scanSelections.remove(jobId)

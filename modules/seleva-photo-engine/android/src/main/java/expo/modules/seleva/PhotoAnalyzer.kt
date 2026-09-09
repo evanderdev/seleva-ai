@@ -14,32 +14,40 @@ import java.security.MessageDigest
 import kotlin.math.abs
 import kotlin.math.min
 
-/** Confined to the scan worker. One bitmap and one OCR task in flight. */
+/** Bounded thumbnail workers; deep OCR has exclusive single-worker ownership. */
 internal class PhotoAnalyzer(private val context: Context) {
   /** Runs bounded, local metadata/image analysis without sending pixels over the bridge. */
-  fun analyzeAssets(assets: List<Map<String, Any>>, stopped: () -> Boolean): List<Map<String, Any>> {
-    val results = mutableListOf<Map<String, Any>>()
-    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+  fun analyzeAssets(assets: List<Map<String, Any>>, fastOnly: Boolean = false, stopped: () -> Boolean): List<Map<String, Any>> {
+    val profile = ScanProfile(context, if (fastOnly) "fast" else "deep")
+    val concurrency = if (fastOnly) ScanTuning.fastConcurrency else ScanTuning.deepConcurrency
+    val executor = java.util.concurrent.Executors.newFixedThreadPool(concurrency)
+    val recognizer = if (fastOnly) null else TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     try {
-      for (asset in assets) {
-        if (stopped() || Thread.currentThread().isInterrupted) break
-        val id = asset["id"] as? String ?: continue
-        try {
-          results.add(analyzeAsset(id, recognizer))
-        } catch (error: SecurityException) {
-          throw error
-        } catch (error: InterruptedException) {
-          Thread.currentThread().interrupt()
-          throw error
-        } catch (_: Exception) {
-          // Missing or unreadable assets remain pending for a subsequent scan.
+      // Submit only one bounded window at a time; never queue the whole library.
+      return assets.chunked(concurrency).flatMap { window ->
+        val futures = window.map { asset -> executor.submit<Map<String, Any>?> {
+          android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+          if (stopped()) return@submit null
+          val id = asset["id"] as? String ?: return@submit null
+          try {
+            profile.measure("asset") { analyzeAsset(id, recognizer, fastOnly, profile) }
+          } catch (error: SecurityException) { throw error }
+            catch (_: Exception) { profile.count("failed"); null }
+        } }
+        // Drain every in-flight task before propagating permission errors or returning.
+        var failure: Throwable? = null
+        val results = futures.mapNotNull { future ->
+          try { future.get() } catch (error: java.util.concurrent.ExecutionException) {
+            failure = error.cause; null
+          }
         }
+        failure?.let { throw it }
+        results
       }
-      return results
-    } finally { recognizer.close() }
+    } finally { executor.shutdown(); recognizer?.close(); profile.finish() }
   }
 
-  private fun analyzeAsset(id: String, recognizer: com.google.mlkit.vision.text.TextRecognizer): Map<String, Any> {
+  private fun analyzeAsset(id: String, recognizer: com.google.mlkit.vision.text.TextRecognizer?, fastOnly: Boolean, profile: ScanProfile): Map<String, Any> {
     val match = Regex("android:([1-9][0-9]*):([pv])").matchEntire(id)
       ?: throw IllegalArgumentException("INVALID_ID")
     val assetId = match.groupValues[1].toLong()
@@ -48,33 +56,35 @@ internal class PhotoAnalyzer(private val context: Context) {
       if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
       assetId,
     )
-    val bitmap = if (Build.VERSION.SDK_INT >= 29) {
+    val bitmap = profile.measure("thumbnail") { if (Build.VERSION.SDK_INT >= 29) {
       context.contentResolver.loadThumbnail(uri, Size(224, 224), null)
     } else if (video) {
       MediaStore.Video.Thumbnails.getThumbnail(context.contentResolver, assetId, MediaStore.Video.Thumbnails.MINI_KIND, null)
     } else {
       MediaStore.Images.Thumbnails.getThumbnail(context.contentResolver, assetId, MediaStore.Images.Thumbnails.MINI_KIND, null)
     }
+    }
     val analysis = mutableMapOf<String, Any>(
       "photoId" to id,
       "analysisVersion" to 1,
-      "modelVersion" to "android-heuristic-1",
+      "modelVersion" to if (fastOnly) "android-fast-1" else "android-heuristic-1",
       "analyzedAt" to System.currentTimeMillis(),
     )
+    if (bitmap == null) { profile.count("unavailable"); throw java.io.FileNotFoundException() }
     if (bitmap != null) {
       try {
-        val blur = blurScore(bitmap)
+        val blur = profile.measure("blur") { blurScore(bitmap) }
         analysis["blurScore"] = blur
         analysis["qualityScore"] = 1.0 - blur
-        analysis["brightnessScore"] = brightnessScore(bitmap)
-        analysis["perceptualHash"] = perceptualHash(bitmap)
-        if (!video) {
-          val text = Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap, 0))).text
+        analysis["brightnessScore"] = profile.measure("brightness") { brightnessScore(bitmap) }
+        analysis["perceptualHash"] = profile.measure("visualHash") { perceptualHash(bitmap) }
+        if (!video && recognizer != null) {
+          val text = profile.measure("ocr") { Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap, 0))).text }
           if (text.isNotBlank()) analysis["ocrText"] = text.take(10000)
         }
       } finally { bitmap.recycle() }
     }
-    if (!video) analysis["contentHash"] = contentHash(uri)
+    if (!video && !fastOnly) analysis["contentHash"] = profile.measure("contentHash") { contentHash(uri) }
     analysis["isScreenshot"] = isScreenshot(uri)
     return analysis
   }

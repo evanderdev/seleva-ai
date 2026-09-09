@@ -1,5 +1,28 @@
 # Índice SQLite
 
+## Fechamento de conexões com FTS
+
+Abrir `seleva.db` com `finalizeUnusedStatementsBeforeClosing: false`.
+As conexões criadas por `withExclusiveTransactionAsync` herdam essa opção.
+Na versão instalada do Expo SQLite, a finalização automática percorre também
+statements internos do FTS; o fechamento pode liberá-los novamente e corromper
+memória nativa. Ver [Expo #38168](https://github.com/expo/expo/issues/38168).
+`runAsync` e `getAllAsync` já finalizam seus statements em `finally`. Se adicionarmos
+uso direto de `prepareAsync`, finalizar explicitamente em `try/finally`.
+Preservar transações assíncronas, FTS e ACK somente após commit.
+
+Regressão observada no Android em 2026-09-08: após um lote de análises, falha em
+`NativeDatabase.closeAsync` com referência a statement finalizado, espera de ACK
+até timeout e SIGSEGV. Também houve crashes em outros componentes nativos.
+Jest com `node:sqlite` não exercita esse fechamento do Expo; validar no Development
+Build com gravação de análises/FTS, fechamento das transações e reabertura do app.
+
+Validação da correção: lint, typecheck dos seis pacotes e 72 testes Jest passaram.
+No Android conectado, a etapa rápida concluiu a enumeração dos 4.324 assets e
+avançou para OCR/hash, com múltiplos lotes completos sem novo SIGSEGV observado.
+O processo foi reiniciado para conferir reaproveitamento do cache. Essa execução
+não valida iOS nem estabilidade prolongada em bibliotecas de 30k+ assets.
+
 Produção usa expo-sqlite. Testes usam SQLite real em memória via node:sqlite através
 da mesma interface SqlDatabase. O banco é aberto como `seleva.db`, com WAL, foreign keys
 e busy timeout. Não contém cópias dos arquivos da galeria.

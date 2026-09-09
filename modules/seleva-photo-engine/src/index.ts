@@ -19,6 +19,11 @@ export interface NativeLibraryModule {
     batchSize: number,
     cursor: string | null,
   ): Promise<unknown>;
+  startFastScan?(
+    jobId: string,
+    batchSize: number,
+    cursor: string | null,
+  ): Promise<unknown>;
   startIncrementalScan?(
     jobId: string,
     batchSize: number,
@@ -48,6 +53,7 @@ export function getNativeLibraryModule(): NativeLibraryModule | null {
 }
 
 export function getNativeScannerModule(): {
+  startFastScan?: NativeLibraryModule['startFastScan'];
   startIncrementalScan?: NativeLibraryModule['startIncrementalScan'];
   selectScanAssets?: NativeLibraryModule['selectScanAssets'];
   startScan: NonNullable<NativeLibraryModule['startScan']>;
@@ -60,6 +66,7 @@ export function getNativeScannerModule(): {
   if (!native?.startScan || !native.stopScan || !native.addListener)
     return null;
   return {
+    startFastScan: native.startFastScan?.bind(native),
     startScan: native.startScan.bind(native),
     startIncrementalScan: native.startIncrementalScan?.bind(native),
     selectScanAssets: native.selectScanAssets?.bind(native),

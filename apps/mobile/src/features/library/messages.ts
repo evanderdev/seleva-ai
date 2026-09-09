@@ -1,4 +1,10 @@
 export const libraryEn = {
+  limitedLibraryEmpty:
+    'Android is not exposing any photos to SelevaAI. Open Settings to choose accessible photos or allow access to your library.',
+  fastAnalysis: 'Finding blur and similar photos',
+  deepAnalysis: 'Reading text and verifying exact duplicates',
+  stagedAnalysisAvailable:
+    '{{count}} fast results · {{pending}} awaiting full analysis',
   preanalysisSummary: 'Pre-analysis summary',
   initialPreparationTitle: 'Preparing your photo summary',
   initialPreparationHint:
@@ -36,6 +42,12 @@ export const libraryEn = {
   refreshIndex: 'Update library',
 };
 export const libraryPt: Record<keyof typeof libraryEn, string> = {
+  limitedLibraryEmpty:
+    'O Android não está disponibilizando fotos ao SelevaAI. Abra as configurações para selecionar fotos ou permitir acesso à biblioteca.',
+  fastAnalysis: 'Encontrando fotos borradas e parecidas',
+  deepAnalysis: 'Lendo textos e verificando cópias exatas',
+  stagedAnalysisAvailable:
+    '{{count}} resultados rápidos · {{pending}} aguardando análise completa',
   preanalysisSummary: 'Resumo da pré-análise',
   initialPreparationTitle: 'Preparando o resumo das suas fotos',
   initialPreparationHint:
@@ -76,6 +88,12 @@ export const libraryPt: Record<keyof typeof libraryEn, string> = {
   refreshIndex: 'Atualizar biblioteca',
 };
 export const libraryEs: Record<keyof typeof libraryEn, string> = {
+  limitedLibraryEmpty:
+    'Android no está dando acceso a fotos a SelevaAI. Abre Ajustes para seleccionar fotos o permitir acceso a tu biblioteca.',
+  fastAnalysis: 'Buscando fotos borrosas y similares',
+  deepAnalysis: 'Leyendo texto y verificando copias exactas',
+  stagedAnalysisAvailable:
+    '{{count}} resultados rápidos · {{pending}} esperando análisis completo',
   preanalysisSummary: 'Resumen del análisis previo',
   initialPreparationTitle: 'Preparando el resumen de tus fotos',
   initialPreparationHint:

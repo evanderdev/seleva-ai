@@ -7,6 +7,7 @@ const insights: LibraryInsights = {
   knownBytes: 1000,
   unknownSizes: 0,
   pending: 4,
+  fastPending: 4,
   screenshots: 0,
   blurry: 0,
   largeVideos: 0,
@@ -180,11 +181,11 @@ it('reconciles limited access even when the persisted cache is fresh', async () 
   expect(scan.mock.calls[0]?.[0].metadataOnly).toBe(true);
 });
 
-it('does not release Home while native work is running or pending items remain', async () => {
+it('releases metadata while native analysis remains pending', async () => {
   const { controller, scan } = setup('authorized');
   let finish: ((job: ScanJob) => void) | undefined;
-  scan.mockImplementation(({ metadataOnly }) =>
-    metadataOnly
+  scan.mockImplementation(({ metadataOnly, fastOnly }) =>
+    metadataOnly || !fastOnly
       ? Promise.resolve(completed)
       : new Promise((resolve) => {
           finish = resolve;
@@ -228,7 +229,7 @@ it('releases saved batches during analysis and keeps them available after a late
   );
   const work = controller.start();
   for (let i = 0; i < 40 && !finish; i++) await Promise.resolve();
-  expect(controller.getSnapshot().resultsAvailable).toBe(false);
+  expect(controller.getSnapshot().resultsAvailable).toBe(true);
   getInsights.mockResolvedValue({ ...insights, pending: 2 });
   committed?.();
   for (let i = 0; i < 20; i++) await Promise.resolve();
@@ -273,6 +274,7 @@ it('coalesces batch notifications while an insights query is in flight', async (
   for (let i = 0; i < 40 && !finish; i++) await Promise.resolve();
   expect(committed).toBeDefined();
   let resolveInsights: ((value: LibraryInsights) => void) | undefined;
+  jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 2000);
   getInsights.mockClear();
   getInsights.mockImplementationOnce(
     () =>
@@ -295,4 +297,57 @@ it('coalesces batch notifications while an insights query is in flight', async (
     phase: 'ready',
     insights: { pending: 0 },
   });
+});
+
+afterEach(() => jest.restoreAllMocks());
+it('runs fast before deep and keeps results available during OCR', async () => {
+  const { controller, scan, getInsights } = setup('authorized');
+  const stages: string[] = [];
+  scan.mockImplementation(async ({ metadataOnly, fastOnly }) => {
+    stages.push(metadataOnly ? 'metadata' : fastOnly ? 'fast' : 'deep');
+    if (!metadataOnly && !fastOnly) {
+      expect(controller.getSnapshot()).toMatchObject({
+        resultsAvailable: true,
+        analysisStage: 'deep',
+      });
+      getInsights.mockResolvedValue({ ...insights, pending: 0 });
+    }
+    return completed;
+  });
+  await controller.start();
+  expect(stages).toEqual(['metadata', 'fast', 'deep']);
+  expect(controller.getSnapshot().phase).toBe('ready');
+});
+
+it('explains an empty limited selection and rescans when selection changes', async () => {
+  const { controller, getInsights, scan } = setup('limited');
+  getInsights.mockResolvedValue({
+    ...insights,
+    total: 0,
+    pending: 0,
+    fastPending: 0,
+  });
+  await controller.start();
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'permission',
+    error: 'LIMITED_ACCESS_EMPTY',
+    resultsAvailable: false,
+  });
+  getInsights.mockResolvedValue({ ...insights, pending: 0, fastPending: 0 });
+  await controller.start();
+  expect(scan).toHaveBeenCalledTimes(2);
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'ready',
+    resultsAvailable: true,
+  });
+});
+it('reconciles a changed limited selection in the same process', async () => {
+  const { controller, getInsights, scan } = setup('limited');
+  getInsights.mockResolvedValue({ ...insights, pending: 0, fastPending: 0 });
+  await controller.start();
+  await controller.start();
+  expect(scan.mock.calls.map(([options]) => options.metadataOnly)).toEqual([
+    true,
+    true,
+  ]);
 });

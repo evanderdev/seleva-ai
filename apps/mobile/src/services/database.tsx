@@ -17,7 +17,13 @@ const DatabaseContext = createContext<PhotoRepository | null>(null);
 let initialization: Promise<PhotoRepository> | undefined;
 function initialize() {
   initialization ??= (async () => {
-    const db = await openDatabaseAsync('seleva.db');
+    // FTS owns internal statements. Expo's blanket finalization can free them
+    // twice when an exclusive transaction closes its connection (#38168).
+    // runAsync/getAllAsync finalize our statements; transaction connections
+    // inherit this option from the parent database.
+    const db = await openDatabaseAsync('seleva.db', {
+      finalizeUnusedStatementsBeforeClosing: false,
+    });
     try {
       await migrate(db);
       return new PhotoRepository(db);

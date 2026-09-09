@@ -10,6 +10,7 @@ import type { ScanJob } from '@seleva/core';
 
 export interface ScanCallbacks {
   metadataOnly?: boolean;
+  fastOnly?: boolean;
   onCommitted?: () => void;
   onProgress?: (job: ScanJob) => void;
 }
@@ -30,8 +31,17 @@ export async function runLibraryScan(
     existing ?? (await repository.createScanJob(newScanId(), Date.now()));
   if (job.status === 'completed') return job;
   const indexingAt = Date.now();
+  let persistenceMs = 0;
+  let groupingMs = 0;
+  let analysisCount = 0;
+  const rebuildClusters = async () => {
+    const started = Date.now();
+    await repository.rebuildClusters();
+    groupingMs += Date.now() - started;
+  };
   callbacks.onProgress?.({ ...job, status: 'running' });
 
+  let lastClustersAt = 0;
   let writeQueue = Promise.resolve();
   let writeError: unknown;
   let terminal: ScanJob['status'] | undefined;
@@ -48,6 +58,7 @@ export async function runLibraryScan(
         latestCheckpoint = batch.cursor ?? undefined;
         writeQueue = writeQueue
           .then(async () => {
+            const persistenceStarted = Date.now();
             await repository.upsertAssets(batch.assets, indexingAt);
             await repository.upsertAnalyses(batch.analyses);
             await repository.updateScanJob(job.id, {
@@ -56,11 +67,17 @@ export async function runLibraryScan(
               status: 'running',
               checkpoint: batch.cursor,
             });
-            if (batch.analyses.length) await repository.rebuildClusters();
+            persistenceMs += Date.now() - persistenceStarted;
+            analysisCount += batch.analyses.length;
+            if (batch.analyses.length && Date.now() - lastClustersAt >= 5000) {
+              await rebuildClusters();
+              lastClustersAt = Date.now();
+            }
             callbacks.onCommitted?.();
             if (batch.requiresAnalysis) {
               const pending = await repository.getPendingAnalysisIds(
                 batch.assets.map((asset) => asset.id),
+                callbacks.fastOnly,
               );
               await photoScanner.selectAssets(job.id, pending);
             } else {
@@ -182,12 +199,15 @@ export async function runLibraryScan(
       { batchSize: 100, incremental: true },
       undefined, // Restart native enumeration: iOS snapshots do not survive process death.
       callbacks.metadataOnly,
+      callbacks.fastOnly,
     );
     await writeQueue;
     if (writeError) throw writeError;
+    if (terminal === 'paused' || terminal === 'cancelled')
+      await rebuildClusters();
     if (terminal === 'completed') {
       await repository.removeAssetsNotIndexedSince(indexingAt);
-      await repository.rebuildClusters();
+      await rebuildClusters();
     }
     if (!result.ok && terminal === undefined) {
       await repository.updateScanJob(job.id, {
@@ -208,6 +228,21 @@ export async function runLibraryScan(
     });
   } finally {
     subscriptions.forEach((subscription) => subscription.remove());
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.debug('[SelevaAI Scan]', {
+        stage: callbacks.metadataOnly
+          ? 'metadata'
+          : callbacks.fastOnly
+            ? 'fast'
+            : 'deep',
+        totalMs: Date.now() - indexingAt,
+        persistenceMs,
+        groupingMs,
+        processed: latestProcessed,
+        total: latestTotal,
+        analyses: analysisCount,
+      });
+    }
   }
   return repository.getScanJob(job.id);
 }

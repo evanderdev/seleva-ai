@@ -51,6 +51,11 @@ export interface NativeScanTransport {
     batchSize: number,
     cursor: string | null,
   ): Promise<unknown>;
+  startFastScan?(
+    jobId: string,
+    batchSize: number,
+    cursor: string | null,
+  ): Promise<unknown>;
   startIncrementalScan?(
     jobId: string,
     batchSize: number,
@@ -109,10 +114,12 @@ export function createPhotoScanner(native: NativeScanTransport | null) {
       options: ScanOptions,
       cursor?: string,
       metadataOnly = false,
+      fastOnly = false,
     ): Promise<EngineResult<unknown>> {
       if (
         !native ||
         !native.acknowledgeScanBatch ||
+        (fastOnly && !native.startFastScan) ||
         (metadataOnly
           ? !native.startMetadataScan
           : !native.startIncrementalScan || !native.selectScanAssets)
@@ -123,9 +130,11 @@ export function createPhotoScanner(native: NativeScanTransport | null) {
         return {
           ok: true,
           value: await (
-            metadataOnly && native.startMetadataScan
-              ? native.startMetadataScan.bind(native)
-              : native.startIncrementalScan!.bind(native)
+            fastOnly && native.startFastScan
+              ? native.startFastScan.bind(native)
+              : metadataOnly && native.startMetadataScan
+                ? native.startMetadataScan.bind(native)
+                : native.startIncrementalScan!.bind(native)
           )(jobId, request.batchSize, cursor ?? null),
         };
       } catch {

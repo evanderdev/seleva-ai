@@ -49,7 +49,9 @@ export function PreparationScreen() {
         <Text style={{ color: colors.muted, fontSize: 15, lineHeight: 23 }}>
           {t(
             phase === 'permission'
-              ? 'libraryAccessHint'
+              ? error === 'LIMITED_ACCESS_EMPTY'
+                ? 'limitedLibraryEmpty'
+                : 'libraryAccessHint'
               : error === 'ANALYSIS_PENDING'
                 ? 'initialPreparationPending'
                 : error === 'DEVICE_UNSUPPORTED'

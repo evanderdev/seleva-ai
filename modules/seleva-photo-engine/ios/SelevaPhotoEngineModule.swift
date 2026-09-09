@@ -28,7 +28,7 @@ public class SelevaPhotoEngineModule: Module {
     }
   }
 
-  private func scan(jobId: String, batchSize: Int, cursor: String?, metadataOnly: Bool, promise: Promise, incremental: Bool = false) {
+  private func scan(jobId: String, batchSize: Int, cursor: String?, metadataOnly: Bool, promise: Promise, incremental: Bool = false, fastOnly: Bool = false) {
       let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
       guard status == .authorized || status == .limited else { promise.reject("PERMISSION_DENIED", "Photo access required"); return }
       guard !jobId.isEmpty && (1...200).contains(batchSize) else { promise.reject("INVALID_SCAN", "Invalid scan request"); return }
@@ -41,7 +41,7 @@ public class SelevaPhotoEngineModule: Module {
         var processed = 0
         var nextCursor = cursor
         while true {
-          let page = try self.library.listAssets(limit: batchSize, cursor: nextCursor)
+          let page = try self.library.listAssets(limit: metadataOnly ? batchSize : min(batchSize, 20), cursor: nextCursor)
           let assets = page["assets"] as? [[String: Any]] ?? []
           let pageCursor = page["nextCursor"] as? String
           var selected = assets
@@ -55,7 +55,10 @@ public class SelevaPhotoEngineModule: Module {
             self.scanLock.unlock()
             selected = stopped ? [] : assets.filter { ids.contains($0["id"] as? String ?? "") }
           }
-          let analyses: [[String: Any]] = metadataOnly ? [] : self.library.analyzeAssets(selected)
+          let analyses: [[String: Any]] = metadataOnly ? [] : self.library.analyzeAssets(selected, fastOnly: fastOnly, stopped: {
+            self.scanLock.lock(); defer { self.scanLock.unlock() }
+            return self.scanStops[jobId] != ""
+          })
           processed += assets.count
           let cursorValue: Any = pageCursor ?? NSNull()
           self.sendEvent("scanBatch", ["jobId": jobId, "assets": assets, "analyses": analyses, "processed": processed, "total": total, "cursor": cursorValue])
@@ -106,6 +109,9 @@ public class SelevaPhotoEngineModule: Module {
 
     AsyncFunction("startScan") { (jobId: String, batchSize: Int, cursor: String?, promise: Promise) in
       self.scan(jobId: jobId, batchSize: batchSize, cursor: cursor, metadataOnly: false, promise: promise)
+    }.runOnQueue(scanQueue)
+    AsyncFunction("startFastScan") { (jobId: String, batchSize: Int, cursor: String?, promise: Promise) in
+      self.scan(jobId: jobId, batchSize: batchSize, cursor: cursor, metadataOnly: false, promise: promise, incremental: true, fastOnly: true)
     }.runOnQueue(scanQueue)
     AsyncFunction("startIncrementalScan") { (jobId: String, batchSize: Int, cursor: String?, promise: Promise) in
       self.scan(jobId: jobId, batchSize: batchSize, cursor: cursor, metadataOnly: false, promise: promise, incremental: true)

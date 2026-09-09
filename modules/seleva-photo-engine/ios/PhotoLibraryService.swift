@@ -24,34 +24,48 @@ final class PhotoLibraryService: NSObject, PHPhotoLibraryChangeObserver {
   }
 
   // Analysis stays native: only compact scores, hashes and OCR text cross the bridge.
-  func analyzeAssets(_ assets: [[String: Any]]) -> [[String: Any]] {
-    assets.compactMap { row in
-      guard let id = row["id"] as? String,
-            id.hasPrefix("ios:"),
-            let data = Data(base64Encoded: String(id.dropFirst(4))),
+  private let fastConcurrency = 3
+  private let deepConcurrency = 1
+  func analyzeAssets(_ assets: [[String: Any]], fastOnly: Bool = false, stopped: () -> Bool = { false }) -> [[String: Any]] {
+    let concurrency = fastOnly ? fastConcurrency : deepConcurrency
+    let resultLock = NSLock()
+    var results: [[String: Any]] = []
+    for offset in stride(from: 0, to: assets.count, by: concurrency) {
+      if stopped() { break }
+      let count = min(concurrency, assets.count - offset)
+      DispatchQueue.concurrentPerform(iterations: count) { index in
+        autoreleasepool {
+          let row = assets[offset + index]
+          guard !stopped(), let id = row["id"] as? String,
+            id.hasPrefix("ios:"), let data = Data(base64Encoded: String(id.dropFirst(4))),
             let identifier = String(data: data, encoding: .utf8),
-            let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject else { return nil }
-      return analyzeAsset(asset, id: id)
+            let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject else { return }
+          guard let result = analyzeAsset(asset, id: id, fastOnly: fastOnly) else { return }
+          resultLock.lock(); results.append(result); resultLock.unlock()
+        }
+      }
     }
+    return results
   }
 
-  private func analyzeAsset(_ asset: PHAsset, id: String) -> [String: Any] {
+  private func analyzeAsset(_ asset: PHAsset, id: String, fastOnly: Bool) -> [String: Any]? {
     var result: [String: Any] = [
       "photoId": id,
       "analysisVersion": 1,
-      "modelVersion": "ios-vision-1",
+      "modelVersion": fastOnly ? "ios-fast-1" : "ios-vision-1",
       "analyzedAt": Int(Date().timeIntervalSince1970 * 1000),
       "isScreenshot": asset.mediaSubtypes.contains(.photoScreenshot)
     ]
-    if let image = requestImage(asset, size: 224), let cgImage = image.cgImage {
+    guard let image = requestImage(asset, size: 224), let cgImage = image.cgImage else { return nil }
+    do {
       let metrics = imageMetrics(cgImage)
       result["blurScore"] = metrics.blur
       result["qualityScore"] = 1.0 - metrics.blur
       result["brightnessScore"] = metrics.brightness
       result["perceptualHash"] = metrics.hash
-      if asset.mediaType == .image, let text = recognizeText(cgImage), !text.isEmpty { result["ocrText"] = String(text.prefix(10000)) }
+      if !fastOnly, asset.mediaType == .image, let text = recognizeText(cgImage), !text.isEmpty { result["ocrText"] = String(text.prefix(10000)) }
     }
-    if asset.mediaType == .image, let hash = contentHash(asset) { result["contentHash"] = hash }
+    if !fastOnly, asset.mediaType == .image, let hash = contentHash(asset) { result["contentHash"] = hash }
     return result
   }
 
@@ -123,11 +137,13 @@ final class PhotoLibraryService: NSObject, PHPhotoLibraryChangeObserver {
     var hasher = SHA256()
     let options = PHAssetResourceRequestOptions()
     options.isNetworkAccessAllowed = false
+    var succeeded = false
     let semaphore = DispatchSemaphore(value: 0)
     PHAssetResourceManager.default().requestData(for: resource, options: options, dataReceivedHandler: { data in
       hasher.update(data: data)
-    }) { _ in semaphore.signal() }
+    }) { error in succeeded = error == nil; semaphore.signal() }
     semaphore.wait()
+    guard succeeded else { return nil }
     return hasher.finalize().map { String(format: "%02x", $0) }.joined()
   }
   func photoLibraryDidChange(_ changeInstance: PHChange) {
