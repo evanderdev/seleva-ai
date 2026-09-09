@@ -20,6 +20,12 @@ assíncronas existentes; não foi criado outro runtime JavaScript ou banco conco
 Atualizações de insights são coalescidas e limitadas a uma por segundo após a primeira
 análise disponível. A conclusão e as transições forçam a leitura final.
 
+A célula da galeria (`LibraryGridItem`) e o thumbnail são componentes separados e
+memoizados. A tela fornece `renderItem`, abertura e seleção com referências estáveis;
+a seleção é indexada por `Set` para evitar buscas lineares repetidas. O `FlatList`
+continua limitado a 60 assets por página e mantém `removeClippedSubviews=false` por
+causa do crash gráfico já observado.
+
 Pausa normal termina o lote e seu commit. Na destruição do módulo, o scanner libera a
 espera por ACK, impede novos eventos e para entre assets. O worker não interrompe uma
 tarefa ML Kit que ainda esteja usando o bitmap. Uma operação do provedor/ML Kit que não

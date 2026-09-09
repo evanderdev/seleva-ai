@@ -11,6 +11,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - Prioridade atual: Android; iOS fica para depois, conforme orientação do usuário.
 - Android: `PhotoScanRunner` coordena lotes/ACKs, `PhotoAnalyzer` executa OCR/hashes/qualidade, `PhotoThumbnailStore` cuida das miniaturas e `PhotoLibraryService` do MediaStore. `PhotoWorker` mantém filas seriais separadas para scan (prioridade background), miniaturas e consultas. Análise limitada a 20 assets por lote, um bitmap/OCR por vez e um reconhecedor por lote. No teardown, suprimir eventos, liberar ACK e terminar o asset em andamento sem interromper ML Kit enquanto usa o bitmap.
 - Insights durante scan são coalescidos e limitados a uma atualização por segundo após liberar resultados; transições finais sempre atualizam. SQLite mantém o fluxo assíncrono existente e ACK depois do commit.
+- A galeria Android usa componentes memoizados (`Thumbnail` e `LibraryGridItem`), `renderItem` estável e `Set` memoizado para seleção. Itens da `FlatList` não devem receber callbacks ou objetos recriados a cada render; mudanças de seleção devem limitar o render às células afetadas.
 
 - A abertura passa por `PreparationScreen` até existir análise salva (ou biblioteca vazia concluída). `resultsAvailable` libera navegação independentemente da fase do scanner; lotes seguintes, pausa e falha não desmontam a galeria. Permissão revogada bloqueia novamente. Cache de análises também libera acesso ao reabrir.
 - Android: scanner e thumbnails usam filas seriais próprias, fora da fila padrão Expo. Nunca bloquear a fila Expo esperando confirmação JS/SQLite de um lote. A galeria usa `removeClippedSubviews=false` e evita recorte arredondado no contêiner de cada miniatura, como mitigação do crash `libhwui/ClipStack::restore` observado no aparelho.
@@ -45,6 +46,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 ## Estado Atual das Features
 
 - [x] Modularização Android e isolamento das filas nativas; liberação de bitmaps em falhas OCR e proteção quando a imagem redimensionada é a própria origem. Lint, typecheck, 66 testes Jest, 2 testes JVM e APK arm64 passaram. APK instalado e app aberto no aparelho; estabilidade prolongada/30k+ assets ainda pendente.
+- [x] Primeira extração da UI da galeria: thumbnail e célula virtualizada isolados em componentes memoizados, com callbacks estáveis e seleção em `Set`. Typecheck, lint e 66 testes passaram.
 
 - [x] Loading inicial dedicado com leitura/categorização e progresso; Home posterior com resumo antes do prompt e dos filtros. Traduções en/pt-BR/es, typecheck, lint e 63 testes. Validação visual em aparelho pendente.
 

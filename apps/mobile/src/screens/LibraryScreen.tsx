@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   AppState,
   Alert,
   FlatList,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -36,66 +35,8 @@ import { planPrompt, promptSchema } from '../features/search/prompt';
 import { LibraryStatus } from '../features/library/LibraryStatus';
 import { usePhotoRepository } from '../services/database';
 import type { QueryPlan } from '@seleva/core';
-
-export function Thumbnail({
-  asset,
-  expanded = false,
-}: {
-  asset: LibraryPage['assets'][number];
-  expanded?: boolean;
-}) {
-  const { t } = useTranslation();
-  const colors = useTheme();
-  const styles = createStyles(colors);
-  const [uri, setUri] = useState<string>();
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let active = true;
-    setUri(undefined);
-    setLoading(true);
-    const timeout = setTimeout(() => {
-      if (active) {
-        active = false;
-        setLoading(false);
-      }
-    }, 20000);
-    void libraryReader
-      .getThumbnail({ id: asset.id, size: expanded ? 512 : 256 })
-      .then((result) => {
-        if (!active) return;
-        clearTimeout(timeout);
-        if (result.ok) setUri(result.value);
-        setLoading(false);
-      })
-      .catch(() => {
-        clearTimeout(timeout);
-        if (active) setLoading(false);
-      });
-    return () => {
-      clearTimeout(timeout);
-      active = false;
-    };
-  }, [asset.id, expanded]);
-  return (
-    <View style={expanded ? styles.preview : styles.thumbnail}>
-      {uri ? (
-        <Image
-          source={{ uri }}
-          style={styles.image}
-          resizeMode={expanded ? 'contain' : 'cover'}
-          onError={() => setUri(undefined)}
-          accessibilityLabel={t(
-            asset.mediaType === 'video' ? 'videoThumbnail' : 'photoThumbnail',
-          )}
-        />
-      ) : loading ? (
-        <ActivityIndicator />
-      ) : (
-        <Text style={styles.placeholder}>{t('thumbnailUnavailable')}</Text>
-      )}
-    </View>
-  );
-}
+import { LibraryGridItem } from '../features/library/components/LibraryGridItem';
+import { Thumbnail } from '../features/library/components/Thumbnail';
 
 /** Bounded native preview. Indexing will feed SQLite in the scanner phase. */
 export function LibraryScreen({
@@ -145,6 +86,7 @@ export function LibraryScreen({
   const [draft, setDraft] = useState(initialPrompt);
   const [editing, setEditing] = useState(false);
   const [invalid, setInvalid] = useState(false);
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
   function editSearch() {
     setDraft(prompt);
     setInvalid(false);
@@ -177,13 +119,28 @@ export function LibraryScreen({
     setSearchVersion((value) => value + 1);
     setPrompt('');
   }
-  function toggle(id: string) {
+  const toggle = useCallback((id: string) => {
     setSelected((current) =>
       current.includes(id)
         ? current.filter((value) => value !== id)
         : [...current, id],
     );
-  }
+  }, []);
+  const openPreview = useCallback(
+    (asset: LibraryPage['assets'][number]) => setPreview(asset),
+    [],
+  );
+  const renderItem = useCallback(
+    ({ item }: { item: LibraryPage['assets'][number] }) => (
+      <LibraryGridItem
+        asset={item}
+        selected={selectedSet.has(item.id)}
+        onOpen={openPreview}
+        onToggle={toggle}
+      />
+    ),
+    [openPreview, selectedSet, toggle],
+  );
   const generation = useRef(0);
   const load = useCallback(
     async (cursor?: string) => {
@@ -285,58 +242,8 @@ export function LibraryScreen({
         numColumns={2}
         columnWrapperStyle={{ gap: 10 }}
         keyExtractor={(asset) => asset.id}
-        renderItem={({ item }) => (
-          <View
-            style={[styles.tile, selected.includes(item.id) && styles.selected]}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('openPreview')}
-              style={{ flex: 1 }}
-              onPress={() => setPreview(item)}
-            >
-              <Thumbnail asset={item} />
-              <View style={styles.caption}>
-                <Text
-                  style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}
-                >
-                  {t(
-                    item.mediaType === 'video'
-                      ? 'filter_videos'
-                      : 'filter_photos',
-                  )}
-                </Text>
-              </View>
-            </Pressable>
-            <Pressable
-              accessibilityRole="checkbox"
-              accessibilityLabel={t(
-                selected.includes(item.id) ? 'deselectPhoto' : 'selectPhoto',
-              )}
-              accessibilityState={{ checked: selected.includes(item.id) }}
-              onPress={() => toggle(item.id)}
-              style={styles.selectionTarget}
-            >
-              <View
-                style={[
-                  styles.selectionCircle,
-                  {
-                    backgroundColor: selected.includes(item.id)
-                      ? colors.accent
-                      : 'rgba(255,255,255,0.15)',
-                    borderColor: selected.includes(item.id)
-                      ? colors.accent
-                      : '#FFFFFF',
-                  },
-                ]}
-              >
-                {selected.includes(item.id) && (
-                  <Icon name="check" color={colors.primary} size={15} />
-                )}
-              </View>
-            </Pressable>
-          </View>
-        )}
+        renderItem={renderItem}
+        extraData={selectedSet}
         removeClippedSubviews={false}
         initialNumToRender={12}
         maxToRenderPerBatch={6}
@@ -815,50 +722,6 @@ const createStyles = (colors: Palette) =>
       padding: 24,
       paddingTop: 48,
       backgroundColor: colors.background,
-    },
-    preview: { width: '100%', height: 400, justifyContent: 'center' },
-    thumbnail: { flex: 1, justifyContent: 'center' },
-    selected: {
-      borderWidth: 2,
-      borderColor: colors.selectionBorder,
-      borderRadius: 22,
-    },
-    tile: {
-      flex: 1,
-      maxWidth: '50%',
-      aspectRatio: 0.87,
-      padding: 2,
-      borderWidth: 2,
-      borderColor: 'transparent',
-      borderRadius: 22,
-      justifyContent: 'center',
-    },
-    image: { width: '100%', height: '100%', borderRadius: 18 },
-    caption: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      padding: 12,
-      paddingTop: 22,
-      backgroundColor: 'rgba(0,0,0,0.22)',
-    },
-    selectionTarget: {
-      position: 'absolute',
-      top: 2,
-      right: 2,
-      width: 44,
-      height: 44,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    selectionCircle: {
-      width: 25,
-      height: 25,
-      borderRadius: 13,
-      borderWidth: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
     placeholder: { color: colors.muted, textAlign: 'center', fontSize: 12 },
     reasons: {
