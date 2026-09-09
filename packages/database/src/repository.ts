@@ -84,7 +84,14 @@ export class PhotoRepository {
           AND a.analyzed_at >= COALESCE(p.modified_at,0)
       ) SELECT COALESCE(SUM(file_size),0) AS duplicateBytes, COUNT(*) AS duplicateCopies
         FROM ranked WHERE position > 1 AND favorite = 0`);
+    const [similar] = await this.db.getAllAsync<{ similarPhotos: number }>(`
+      SELECT COUNT(DISTINCT p.id) AS similarPhotos
+      FROM photos p JOIN photo_cluster_members m ON m.photo_id = p.id
+      JOIN photo_clusters c ON c.id = m.cluster_id
+      WHERE p.media_type = 'photo' AND c.kind IN ('exact','visual','similar')
+        AND (SELECT COUNT(*) FROM photo_cluster_members other WHERE other.cluster_id = c.id) > 1`);
     return {
+      similarPhotos: similar?.similarPhotos ?? 0,
       ...(row ?? {
         total: 0,
         knownBytes: 0,

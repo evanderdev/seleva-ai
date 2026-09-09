@@ -78,7 +78,7 @@ export function buildPhotoQuery(input: QueryPlan, request: PageRequest) {
     const condition =
       kind === 'duplicate'
         ? "c.kind IN ('exact','visual')"
-        : "c.kind IN ('similar','visual')";
+        : "c.kind IN ('exact','similar','visual')";
     where.push(
       `${enabled ? '' : 'NOT '}EXISTS (SELECT 1 FROM photo_cluster_members m JOIN photo_clusters c ON c.id = m.cluster_id WHERE m.photo_id = p.id AND ${condition} AND (SELECT COUNT(*) FROM photo_cluster_members other WHERE other.cluster_id = c.id) > 1)`,
     );

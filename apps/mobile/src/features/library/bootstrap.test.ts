@@ -3,6 +3,7 @@ import type { ScanCallbacks } from '../../services/scanner';
 import type { EngineResult, PhotoPermission, ScanJob } from '@seleva/core';
 
 const insights: LibraryInsights = {
+  similarPhotos: 0,
   total: 4,
   knownBytes: 1000,
   unknownSizes: 0,

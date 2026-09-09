@@ -1,55 +1,84 @@
-import { useLibrary } from '../features/library/LibraryProvider';
-import { LibraryStatus } from '../features/library/LibraryStatus';
-import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+﻿import { useCallback, useState } from 'react';
+import {
+  Animated,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Icon, layout, useTheme, type IconName } from '@seleva/ui';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { Reveal, useReducedMotion } from '../components/Motion';
+import { useLibrary } from '../features/library/LibraryProvider';
+import { LibraryStatus } from '../features/library/LibraryStatus';
 import { planPrompt, promptSchema } from '../features/search/prompt';
-const suggestions: {
+
+function SummaryCard({
+  label,
+  detail,
+  icon,
+  params,
+}: {
   label: string;
-  hint: string;
+  detail: string;
   icon: IconName;
   params: Record<string, string>;
-}[] = [
-  {
-    label: 'freeSpace',
-    hint: 'reviewLarge',
-    icon: 'space',
-    params: { category: 'videos', minFileSize: String(500 * 1024 * 1024) },
-  },
-  {
-    label: 'similarPhotos',
-    hint: 'exploreGroups',
-    icon: 'similar',
-    params: { similar: '1' },
-  },
-  {
-    label: 'filter_screenshots',
-    hint: 'exploreGroups',
-    icon: 'screenshots',
-    params: { category: 'screenshots' },
-  },
-  {
-    label: 'findBlurry',
-    hint: 'exploreGroups',
-    icon: 'space',
-    params: { minBlur: '0.55' },
-  },
-  {
-    label: 'findDuplicates',
-    hint: 'exploreGroups',
-    icon: 'similar',
-    params: { duplicate: '1' },
-  },
-];
+}) {
+  const colors = useTheme();
+  const reduced = useReducedMotion();
+  const [scale] = useState(() => new Animated.Value(1));
+  function animate(toValue: number) {
+    Animated.spring(scale, {
+      toValue,
+      speed: 28,
+      bounciness: 3,
+      useNativeDriver: true,
+    }).start();
+  }
+  return (
+    <Animated.View style={{ width: '48%', transform: [{ scale }] }}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push({ pathname: '/library', params })}
+        onPressIn={() => {
+          if (!reduced) animate(0.97);
+        }}
+        onPressOut={() => animate(1)}
+        style={[
+          styles.card,
+          { backgroundColor: colors.subtle, borderColor: colors.border },
+        ]}
+      >
+        <Icon name={icon} size={22} color={colors.selectionBorder} />
+        <Text
+          style={{
+            color: colors.text,
+            fontSize: 14,
+            fontWeight: '500',
+            marginTop: 14,
+          }}
+        >
+          {label}
+        </Text>
+        <Text style={{ color: colors.muted, fontSize: 12, marginTop: 5 }}>
+          {detail}
+        </Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export function AssistantScreen() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const colors = useTheme();
   const [prompt, setPrompt] = useState('');
   const [invalid, setInvalid] = useState(false);
+  const [focused, setFocused] = useState(false);
   const { synchronize, insights } = useLibrary();
   useFocusEffect(
     useCallback(() => {
@@ -75,165 +104,228 @@ export function AssistantScreen() {
       },
     });
   }
+  function sectionHeader(label: string, category: 'photos' | 'videos') {
+    return (
+      <View style={[layout.row, styles.sectionHeader]}>
+        <Text
+          accessibilityRole="header"
+          style={{ color: colors.text, fontSize: 18, fontWeight: '600' }}
+        >
+          {label}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t(
+            category === 'photos' ? 'allPhotos' : 'allVideos',
+          )}
+          onPress={() =>
+            router.push({ pathname: '/library', params: { category } })
+          }
+          style={{ minHeight: 44, justifyContent: 'center' }}
+        >
+          <Text style={{ color: colors.muted, fontSize: 12 }}>
+            {t('viewAll')}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <ScreenHeader home />
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           layout.content,
-          { flexGrow: 1, paddingTop: 24, paddingBottom: 24 },
+          { paddingTop: 28, paddingBottom: 36 },
         ]}
       >
-        <Text style={{ fontSize: 14, color: colors.muted, marginBottom: 10 }}>
-          {new Date().toLocaleDateString(i18n.language, {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-          })}
-        </Text>
-        <Text style={[layout.title, { color: colors.text, marginBottom: 38 }]}>
-          {t('greeting')}
-        </Text>
-        <LibraryStatus />
-        <Text
-          style={[layout.eyebrow, { color: colors.muted, marginBottom: 10 }]}
-        >
-          {t('searchLabel')}
-        </Text>
-        <View
-          style={[
-            layout.row,
-            {
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 20,
-              paddingHorizontal: 16,
-              minHeight: 62,
-              boxShadow: '0 6px 22px rgba(32,55,35,0.04)',
-            },
-          ]}
-        >
-          <Icon name="search" />
-          <TextInput
-            value={prompt}
-            onChangeText={setPrompt}
-            onSubmitEditing={submit}
-            returnKeyType="search"
-            maxLength={500}
-            placeholder={t('assistantPlaceholder')}
-            accessibilityLabel={t('searchLabel')}
-            placeholderTextColor={colors.muted}
-            style={{ flex: 1, color: colors.text, fontSize: 14, minHeight: 58 }}
-          />
-          <Pressable
-            onPress={submit}
-            accessibilityRole="button"
-            accessibilityLabel={t('findPhotos')}
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 13,
-              backgroundColor: colors.primary,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Icon name="arrow" color={colors.accent} size={18} />
-          </Pressable>
-        </View>
-        {invalid && (
+        <Reveal>
           <Text
-            accessibilityRole="alert"
-            style={{ color: colors.text, marginTop: 8 }}
+            accessibilityRole="header"
+            style={[styles.title, { color: colors.text }]}
           >
-            {t('invalidPrompt')}
+            {t('greeting')}
           </Text>
-        )}
-        <View
-          style={[
-            layout.row,
-            {
-              justifyContent: 'space-between',
-              marginTop: 40,
-              marginBottom: 14,
-            },
-          ]}
-        >
-          <Text style={{ color: colors.text, fontSize: 14, fontWeight: '500' }}>
-            {t('startHere')}
-          </Text>
-          <Text style={{ color: colors.muted, fontSize: 12 }}>
-            {t('tapExplore')}
-          </Text>
-        </View>
-        <ScrollView
-          horizontal
-          style={{ flexGrow: 0 }}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 12 }}
-        >
-          {suggestions.map((item) => (
+          <View
+            style={[
+              styles.prompt,
+              {
+                backgroundColor: colors.surface,
+                borderColor: focused ? colors.selectionBorder : colors.border,
+              },
+            ]}
+          >
+            <View style={layout.row}>
+              <Icon name="sparkles" color={colors.selectionBorder} size={24} />
+              <TextInput
+                value={prompt}
+                onChangeText={(value) => {
+                  setPrompt(value);
+                  setInvalid(false);
+                }}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                onSubmitEditing={submit}
+                returnKeyType="search"
+                maxLength={500}
+                placeholder={t('assistantPlaceholder')}
+                accessibilityLabel={t('greeting')}
+                placeholderTextColor={colors.muted}
+                style={{
+                  flex: 1,
+                  color: colors.text,
+                  fontSize: 16,
+                  minHeight: 64,
+                }}
+              />
+            </View>
             <Pressable
-              key={item.label}
+              onPress={submit}
+              disabled={!prompt.trim()}
               accessibilityRole="button"
-              onPress={() =>
-                router.push({
-                  pathname: '/library',
-                  params: {
-                    ...item.params,
-                  },
-                })
-              }
-              style={({ pressed }) => ({
-                width: 150,
-                minHeight: 135,
-                padding: 16,
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.subtle,
-                opacity: pressed ? 0.7 : 1,
-              })}
+              accessibilityLabel={t('search')}
+              accessibilityState={{ disabled: !prompt.trim() }}
+              style={({ pressed }) => [
+                styles.send,
+                {
+                  backgroundColor: prompt.trim()
+                    ? colors.accent
+                    : colors.selected,
+                  opacity: pressed ? 0.65 : 1,
+                },
+              ]}
             >
-              <View style={{ alignSelf: 'flex-start', marginBottom: 22 }}>
-                <Icon name={item.icon} size={18} />
-              </View>
-              <Text
-                style={{ color: colors.text, fontSize: 13, marginBottom: 5 }}
-              >
-                {t(item.label)}
-              </Text>
-              <Text
-                style={{ color: colors.muted, fontSize: 11, lineHeight: 17 }}
-              >
-                {insights && item.label !== 'similarPhotos'
-                  ? t('insightItems', {
-                      count:
-                        item.label === 'filter_screenshots'
-                          ? insights.screenshots
-                          : item.label === 'findBlurry'
-                            ? insights.blurry
-                            : item.label === 'findDuplicates'
-                              ? insights.duplicateCopies
-                              : item.label === 'freeSpace'
-                                ? insights.largeVideos
-                                : 0,
-                    })
-                  : t(item.hint)}
-              </Text>
+              <Icon
+                name="arrow"
+                color={prompt.trim() ? colors.primary : colors.muted}
+                size={22}
+              />
             </Pressable>
-          ))}
-        </ScrollView>
-        <View style={{ flex: 1, minHeight: 64 }} />
-        <View style={[layout.row, { gap: 8, paddingTop: 20 }]}>
-          <Icon name="lock" size={14} />
-          <Text style={{ flex: 1, color: colors.muted, fontSize: 11 }}>
-            {t('privateFooter')}
-          </Text>
-        </View>
+          </View>
+          {invalid && (
+            <Text
+              accessibilityRole="alert"
+              style={{ color: colors.text, marginTop: 8 }}
+            >
+              {t('invalidPrompt')}
+            </Text>
+          )}
+        </Reveal>
+        <LibraryStatus />
+        <Reveal delay={100}>
+          {sectionHeader(t('filter_photos'), 'photos')}
+          <View style={styles.grid}>
+            <SummaryCard
+              label={t('filter_screenshots')}
+              detail={
+                insights
+                  ? t('insightItems', { count: insights.screenshots })
+                  : t('viewResults')
+              }
+              icon="screenshots"
+              params={{ category: 'screenshots' }}
+            />
+            <SummaryCard
+              label={t('similarPhotos')}
+              detail={
+                insights
+                  ? t('insightItems', { count: insights.similarPhotos })
+                  : t('viewResults')
+              }
+              icon="similar"
+              params={{ category: 'photos', similar: '1' }}
+            />
+            <SummaryCard
+              label={t('blurryPhotos')}
+              detail={
+                insights
+                  ? t('insightItems', { count: insights.blurry })
+                  : t('viewResults')
+              }
+              icon="space"
+              params={{ category: 'photos', minBlur: '0.55' }}
+            />
+          </View>
+        </Reveal>
+        <Reveal delay={180}>
+          {sectionHeader(t('filter_videos'), 'videos')}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              router.push({
+                pathname: '/library',
+                params: { category: 'videos', minFileSize: '524288000' },
+              })
+            }
+            style={({ pressed }) => [
+              styles.videoCard,
+              {
+                backgroundColor: colors.subtle,
+                borderColor: colors.border,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Icon name="space" color={colors.selectionBorder} size={28} />
+            <View style={{ flex: 1, gap: 5 }}>
+              <Text
+                style={{ color: colors.text, fontSize: 14, fontWeight: '500' }}
+              >
+                {t('largeVideoModule')}
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>
+                {insights
+                  ? t('insightItems', { count: insights.largeVideos })
+                  : t('viewResults')}
+              </Text>
+            </View>
+            <View style={{ transform: [{ rotate: '90deg' }] }}>
+              <Icon name="arrow" size={18} />
+            </View>
+          </Pressable>
+        </Reveal>
       </ScrollView>
     </SafeAreaView>
   );
 }
+const styles = StyleSheet.create({
+  title: {
+    fontSize: 32,
+    lineHeight: 39,
+    letterSpacing: -1.2,
+    fontWeight: '600',
+    marginBottom: 24,
+    maxWidth: 290,
+  },
+  prompt: { borderWidth: 1, borderRadius: 24, padding: 16, minHeight: 140 },
+  send: {
+    alignSelf: 'flex-end',
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionHeader: {
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 12,
+  },
+  card: { padding: 16, borderRadius: 20, borderWidth: 1, minHeight: 135 },
+  videoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+});

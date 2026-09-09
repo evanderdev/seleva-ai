@@ -1,4 +1,4 @@
-import {
+﻿import {
   ActivityIndicator,
   Linking,
   ScrollView,
@@ -13,7 +13,7 @@ import { useLibrary } from '../features/library/LibraryProvider';
 export function PreparationScreen() {
   const { t } = useTranslation();
   const colors = useTheme();
-  const { phase, job, insights, error, permission, retry } = useLibrary();
+  const { phase, job, error, permission, retry } = useLibrary();
   const busy = ['opening', 'metadata', 'analysis'].includes(phase);
   const progress = job?.total
     ? Math.min(100, Math.round((job.processed / job.total) * 100))
@@ -55,25 +55,14 @@ export function PreparationScreen() {
               : error === 'ANALYSIS_PENDING'
                 ? 'initialPreparationPending'
                 : error === 'DEVICE_UNSUPPORTED'
-                  ? 'libraryHint'
+                  ? 'queryUnavailable'
                   : phase === 'error'
                     ? 'permissionError'
                     : 'initialPreparationHint',
           )}
         </Text>
         {busy && (
-          <ActivityIndicator size="large" color={colors.selectionBorder} />
-        )}
-        {busy && (
-          <Text style={{ color: colors.text }}>
-            {t(
-              phase === 'analysis'
-                ? 'initialAnalysisStep'
-                : phase === 'metadata'
-                  ? 'initialMetadataStep'
-                  : 'initialCacheStep',
-            )}
-          </Text>
+          <ActivityIndicator size="small" color={colors.selectionBorder} />
         )}
         {busy && job && (
           <View style={{ gap: 10 }}>
@@ -81,7 +70,7 @@ export function PreparationScreen() {
               accessibilityRole="progressbar"
               accessibilityValue={{ min: 0, max: 100, now: progress }}
               style={{
-                height: 6,
+                height: 2,
                 borderRadius: 6,
                 backgroundColor: colors.border,
                 overflow: 'hidden',
@@ -89,7 +78,7 @@ export function PreparationScreen() {
             >
               <View
                 style={{
-                  height: 6,
+                  height: 2,
                   width: `${progress}%`,
                   backgroundColor: colors.selectionBorder,
                 }}
@@ -99,14 +88,6 @@ export function PreparationScreen() {
               {t('scanWork', { processed: job.processed, total: job.total })}
             </Text>
           </View>
-        )}
-        {insights && (
-          <Text style={{ color: colors.muted }}>
-            {t('analysisAvailable', {
-              count: Math.max(0, insights.total - insights.pending),
-              pending: insights.pending,
-            })}
-          </Text>
         )}
         {permission === 'limited' && (
           <Text style={{ color: colors.muted }}>{t('limitedLibrary')}</Text>

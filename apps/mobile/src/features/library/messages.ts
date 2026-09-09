@@ -1,4 +1,21 @@
 export const libraryEn = {
+  viewProgress: 'View processing progress',
+  progressTitle: 'Processing progress',
+  progressStage: 'Current step',
+  progressReading: 'Finding photos and videos',
+  progressOpening: 'Preparing to process your library',
+  progressHint:
+    'Seleva is organizing your library to find similar photos, blur and searchable text. Everything happens on your phone.',
+  progressStepHint:
+    'Progress is shown for the current step. The counter starts again when the next step begins.',
+  progressWaiting: 'Preparing this step…',
+  progressComplete: 'Processing complete',
+  progressPaused: 'Processing paused',
+  progressSaved: 'Your progress is saved. You can continue exploring.',
+  progressResume: 'Continue processing',
+  progressRemaining: '{{count}} items still need processing',
+  progressPercent: '{{percent}}% of this step',
+  progressDetails: 'You can go back and explore while processing continues.',
   limitedLibraryEmpty:
     'Android is not exposing any photos to SelevaAI. Open Settings to choose accessible photos or allow access to your library.',
   fastAnalysis: 'Finding blur and similar photos',
@@ -8,7 +25,7 @@ export const libraryEn = {
   preanalysisSummary: 'Pre-analysis summary',
   initialPreparationTitle: 'Preparing your photo summary',
   initialPreparationHint:
-    'We are preparing the first results. Each analyzed batch becomes available while the next ones continue. Saved analysis is reused.',
+    'Just a moment. We’re getting everything ready for you.',
   initialPreparationPending:
     'Some items could not be analyzed. Your progress is saved. Try again to finish preparing your library.',
   initialCacheStep: 'Checking saved analysis',
@@ -42,6 +59,24 @@ export const libraryEn = {
   refreshIndex: 'Update library',
 };
 export const libraryPt: Record<keyof typeof libraryEn, string> = {
+  viewProgress: 'Ver progresso do processamento',
+  progressTitle: 'Progresso do processamento',
+  progressStage: 'Etapa atual',
+  progressReading: 'Encontrando fotos e vídeos',
+  progressOpening: 'Preparando sua biblioteca para análise',
+  progressHint:
+    'O Seleva está organizando sua biblioteca para encontrar fotos parecidas, fotos borradas e textos que você pode buscar. Tudo acontece no seu celular.',
+  progressStepHint:
+    'O progresso é da etapa atual. A contagem recomeça quando a próxima etapa inicia.',
+  progressWaiting: 'Preparando esta etapa…',
+  progressComplete: 'Processamento concluído',
+  progressPaused: 'Processamento pausado',
+  progressSaved: 'Seu progresso está salvo. Você pode continuar explorando.',
+  progressResume: 'Continuar processamento',
+  progressRemaining: '{{count}} itens ainda precisam ser processados',
+  progressPercent: '{{percent}}% desta etapa',
+  progressDetails:
+    'Você pode voltar e explorar enquanto o processamento continua.',
   limitedLibraryEmpty:
     'O Android não está disponibilizando fotos ao SelevaAI. Abra as configurações para selecionar fotos ou permitir acesso à biblioteca.',
   fastAnalysis: 'Encontrando fotos borradas e parecidas',
@@ -50,8 +85,7 @@ export const libraryPt: Record<keyof typeof libraryEn, string> = {
     '{{count}} resultados rápidos · {{pending}} aguardando análise completa',
   preanalysisSummary: 'Resumo da pré-análise',
   initialPreparationTitle: 'Preparando o resumo das suas fotos',
-  initialPreparationHint:
-    'Estamos preparando os primeiros resultados. Cada lote analisado fica disponível enquanto os próximos continuam. Análises salvas são reaproveitadas.',
+  initialPreparationHint: 'Só um instante. Estamos preparando tudo para você.',
   initialPreparationPending:
     'Alguns itens não puderam ser analisados. Seu progresso está salvo. Tente novamente para concluir a preparação.',
   initialCacheStep: 'Verificando análises salvas',
@@ -88,6 +122,24 @@ export const libraryPt: Record<keyof typeof libraryEn, string> = {
   refreshIndex: 'Atualizar biblioteca',
 };
 export const libraryEs: Record<keyof typeof libraryEn, string> = {
+  viewProgress: 'Ver progreso del procesamiento',
+  progressTitle: 'Progreso del procesamiento',
+  progressStage: 'Paso actual',
+  progressReading: 'Encontrando fotos y vídeos',
+  progressOpening: 'Preparando tu biblioteca para analizarla',
+  progressHint:
+    'Seleva está organizando tu biblioteca para encontrar fotos parecidas, fotos borrosas y texto que puedes buscar. Todo ocurre en tu teléfono.',
+  progressStepHint:
+    'El progreso corresponde al paso actual. El contador vuelve a empezar al iniciar el siguiente paso.',
+  progressWaiting: 'Preparando este paso…',
+  progressComplete: 'Procesamiento completado',
+  progressPaused: 'Procesamiento pausado',
+  progressSaved: 'Tu progreso está guardado. Puedes seguir explorando.',
+  progressResume: 'Continuar procesamiento',
+  progressRemaining: '{{count}} elementos aún necesitan procesamiento',
+  progressPercent: '{{percent}}% de este paso',
+  progressDetails:
+    'Puedes volver y explorar mientras continúa el procesamiento.',
   limitedLibraryEmpty:
     'Android no está dando acceso a fotos a SelevaAI. Abre Ajustes para seleccionar fotos o permitir acceso a tu biblioteca.',
   fastAnalysis: 'Buscando fotos borrosas y similares',
@@ -96,8 +148,7 @@ export const libraryEs: Record<keyof typeof libraryEn, string> = {
     '{{count}} resultados rápidos · {{pending}} esperando análisis completo',
   preanalysisSummary: 'Resumen del análisis previo',
   initialPreparationTitle: 'Preparando el resumen de tus fotos',
-  initialPreparationHint:
-    'Estamos preparando los primeros resultados. Cada lote analizado queda disponible mientras continúan los siguientes. Reutilizamos los análisis guardados.',
+  initialPreparationHint: 'Solo un momento. Estamos preparando todo para ti.',
   initialPreparationPending:
     'No se pudieron analizar algunos elementos. Tu progreso está guardado. Inténtalo de nuevo para terminar la preparación.',
   initialCacheStep: 'Comprobando análisis guardados',

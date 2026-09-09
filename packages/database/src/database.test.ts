@@ -139,6 +139,56 @@ it('searches actual FTS and keeps it synchronized on update/delete', async () =>
   await db.runAsync('DELETE FROM photos WHERE id = ?', 'a');
   expect(await db.getAllAsync('SELECT * FROM photo_ocr')).toHaveLength(0);
 });
+it('includes exact-only and visual copies in similar photos without repeating assets', async () => {
+  await repository.upsertAssets(
+    ['a', 'b', 'c', 'd', 'unique'].map((id, index) => ({
+      id,
+      mediaType: 'photo' as const,
+      createdAt: index,
+      width: 10,
+      height: 10,
+    })),
+  );
+  await repository.upsertAnalyses([
+    { photoId: 'a', analysisVersion: 1, analyzedAt: 10, contentHash: 'exact' },
+    { photoId: 'b', analysisVersion: 1, analyzedAt: 10, contentHash: 'exact' },
+    {
+      photoId: 'c',
+      analysisVersion: 1,
+      analyzedAt: 10,
+      contentHash: 'other',
+      perceptualHash: 'visual',
+    },
+    {
+      photoId: 'd',
+      analysisVersion: 1,
+      analyzedAt: 10,
+      contentHash: 'other',
+      perceptualHash: 'visual',
+    },
+  ]);
+  await repository.rebuildClusters();
+  const result = await repository.query(
+    queryPlanSchema.parse({
+      filters: { similar: true, mediaTypes: ['photo'] },
+      exclusions: { favorites: false },
+    }),
+    { limit: 10 },
+  );
+  expect(result.assets.map((asset) => asset.id)).toEqual(['d', 'c', 'b', 'a']);
+  expect((await repository.getInsights()).similarPhotos).toBe(4);
+  await db.runAsync("UPDATE photos SET media_type='video' WHERE id='d'");
+  expect((await repository.getInsights()).similarPhotos).toBe(3);
+  const excluded = await repository.query(
+    queryPlanSchema.parse({
+      filters: { similar: false },
+      exclusions: { favorites: false },
+    }),
+    { limit: 10 },
+  );
+  expect(excluded.assets.map((asset) => asset.id)).toEqual(['unique']);
+});
+
 it('persists native analysis and builds duplicate clusters', async () => {
   await repository.upsertAssets([
     { id: 'a', mediaType: 'photo', createdAt: 1, width: 10, height: 10 },

@@ -1,7 +1,16 @@
 import { libraryEn, libraryPt, libraryEs } from '../features/library/messages';
 export const en = {
   ...libraryEn,
-  greeting: 'Good morning.',
+  greeting: 'What would you like to do?',
+  viewAll: 'View all',
+  allPhotos: 'View all photos',
+  allVideos: 'View all videos',
+  viewResults: 'Explore',
+  blurryPhotos: 'Blurry photos',
+  duplicatePhotos: 'Duplicate photos',
+  largeVideoModule: 'Large videos',
+  quietUpdating: 'Processing photos and videos…',
+  quietReady: 'Ready to explore',
   searchLabel: 'What are you looking for?',
   startHere: 'Start here',
   tapExplore: 'Tap to explore',
@@ -60,8 +69,7 @@ export const en = {
   largeVideos: 'Review large videos',
   oldPhotos: 'Find photos from last year',
   findDuplicates: 'Find duplicate photos',
-  queryUnavailable:
-    'This filter requires a compatible device and the latest SelevaAI development build.',
+  queryUnavailable: 'This search is not available on this device yet.',
   refreshResults: 'Your library changed. Refresh to see the latest results.',
   filter_all: 'All',
   filter_photos: 'Photos',
@@ -92,8 +100,7 @@ export const en = {
   reasonOcr: 'Matches local OCR text.',
   reviewOnly:
     'Review photos and select items on this page. Selection resets when you change pages or filters. Confirm before moving anything to trash.',
-  previewHint:
-    'Local preview up to 512 pixels. Video playback is not available yet.',
+  previewHint: 'Video playback is not available yet.',
   browseLibrary: 'Explore your photos',
   refreshLibrary: 'Refresh photos',
   nextPhotos: 'Next photos',
@@ -150,7 +157,16 @@ export const en = {
 export type Messages = { [K in keyof typeof en]: string };
 export const ptBR: Messages = {
   ...libraryPt,
-  greeting: 'Bom dia.',
+  greeting: 'O que deseja fazer?',
+  viewAll: 'Ver tudo',
+  allPhotos: 'Ver todas as fotos',
+  allVideos: 'Ver todos os vídeos',
+  viewResults: 'Explorar',
+  blurryPhotos: 'Fotos borradas',
+  duplicatePhotos: 'Fotos duplicadas',
+  largeVideoModule: 'Vídeos grandes',
+  quietUpdating: 'Processando fotos e vídeos…',
+  quietReady: 'Tudo pronto para explorar',
   searchLabel: 'O que você procura?',
   startHere: 'Comece por aqui',
   tapExplore: 'Toque para explorar',
@@ -211,8 +227,7 @@ export const ptBR: Messages = {
   largeVideos: 'Revisar vídeos grandes',
   oldPhotos: 'Encontrar fotos do ano passado',
   findDuplicates: 'Encontrar fotos duplicadas',
-  queryUnavailable:
-    'Este filtro exige um dispositivo compatível e o Development Build atualizado do SelevaAI.',
+  queryUnavailable: 'Esta busca ainda não está disponível neste dispositivo.',
   refreshResults:
     'Sua biblioteca mudou. Atualize para ver os resultados atuais.',
   filter_all: 'Tudo',
@@ -244,8 +259,7 @@ export const ptBR: Messages = {
   reasonOcr: 'Corresponde ao texto OCR local.',
   reviewOnly:
     'Revise e selecione os itens desta página. A seleção é reiniciada ao trocar de página ou filtro. Confirme antes de mover qualquer item para a lixeira.',
-  previewHint:
-    'Prévia local de até 512 pixels. A reprodução de vídeos ainda não está disponível.',
+  previewHint: 'A reprodução de vídeos ainda não está disponível.',
   browseLibrary: 'Explorar suas fotos',
   refreshLibrary: 'Atualizar fotos',
   nextPhotos: 'Próximas fotos',
@@ -304,7 +318,16 @@ export const ptBR: Messages = {
 };
 export const es: Messages = {
   ...libraryEs,
-  greeting: 'Buenos días.',
+  greeting: '¿Qué te gustaría hacer?',
+  viewAll: 'Ver todo',
+  allPhotos: 'Ver todas las fotos',
+  allVideos: 'Ver todos los vídeos',
+  viewResults: 'Explorar',
+  blurryPhotos: 'Fotos borrosas',
+  duplicatePhotos: 'Fotos duplicadas',
+  largeVideoModule: 'Vídeos grandes',
+  quietUpdating: 'Procesando fotos y vídeos…',
+  quietReady: 'Todo listo para explorar',
   searchLabel: '¿Qué estás buscando?',
   startHere: 'Empieza aquí',
   tapExplore: 'Toca para explorar',
@@ -363,8 +386,7 @@ export const es: Messages = {
   largeVideos: 'Revisar vídeos grandes',
   oldPhotos: 'Encontrar fotos del año pasado',
   findDuplicates: 'Encontrar fotos duplicadas',
-  queryUnavailable:
-    'Este filtro requiere un dispositivo compatible y el Development Build actualizado de SelevaAI.',
+  queryUnavailable: 'Esta búsqueda aún no está disponible en este dispositivo.',
   refreshResults:
     'Tu biblioteca cambió. Actualiza para ver los resultados actuales.',
   filter_all: 'Todo',
@@ -397,8 +419,7 @@ export const es: Messages = {
   reasonOcr: 'Coincide con el texto OCR local.',
   reviewOnly:
     'Revisa y selecciona los elementos de esta página. La selección se reinicia al cambiar de página o filtro. Confirma antes de mover algo a la papelera.',
-  previewHint:
-    'Vista previa local de hasta 512 píxeles. La reproducción de vídeos aún no está disponible.',
+  previewHint: 'La reproducción de vídeos aún no está disponible.',
   browseLibrary: 'Explorar tus fotos',
   refreshLibrary: 'Actualizar fotos',
   nextPhotos: 'Siguientes fotos',

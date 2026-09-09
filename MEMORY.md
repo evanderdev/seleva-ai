@@ -8,6 +8,8 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 ## ⚠️ Regras Estritas
 
+- Home: manter um único módulo “Fotos parecidas”, incluindo cópias exatas e semelhanças visuais. O filtro `similar` inclui clusters exact/visual/similar; `duplicate` permanece disponível para buscas específicas. Não reintroduzir dois cards sobrepostos.
+
 - SQLite/FTS (2026-09-08): abrir `seleva.db` com `finalizeUnusedStatementsBeforeClosing: false`, opção herdada pelas transações exclusivas. A limpeza automática do Expo SQLite pode finalizar statements internos do FTS duas vezes ao fechar a conexão, causando corrupção de memória/SIGSEGV (Expo #38168). `runAsync`/`getAllAsync` já finalizam seus statements; uso futuro de `prepareAsync` exige `finally`. Preservar APIs assíncronas e ACK após commit. Ver `docs/database.md`.
 
 - Pipeline progressivo (2026-09-08): metadata -> fast -> deep. `startFastScan` exige novo Development Build, sem fallback para OCR. Metadados persistidos liberam a Home; `analysisStage` distingue fast/deep.
@@ -52,6 +54,10 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - Resultados mostram contagem e seleção da página (até 60 itens), sem apresentar essa contagem como total global. Prévia e confirmação do SO continuam obrigatórias para lixeira.
 
 ## Estado Atual das Features
+
+- [x] Progresso dedicado em `/progress` (2026-09-09), aberto pelo status “Processando fotos e vídeos…” na Home: etapa atual, contagem e percentual por etapa, estados de pausa/erro/conclusão e retomada. Consome LibraryProvider sem iniciar outro scan; traduções en/pt-BR/es. Fotos parecidas mostra COUNT(DISTINCT photo id) de clusters exact/visual/similar com mais de um membro, somente fotos, incluindo favoritas como a galeria. Sem migration. Typecheck, lint e 73 testes passaram; validação visual no aparelho pendente.
+
+- [x] Home simplificada (2026-09-08): pergunta e prompt no topo, módulos de Fotos e Vídeos separados abaixo e status discreto, substituindo o resumo técnico antes do prompt. Entrada suave e resposta ao toque com Animated nativo, respeitando movimento reduzido; mantém tokens claros/escuros e messages en/pt-BR/es. Sem dependências novas. Validação visual e fluidez em aparelho pendentes.
 
 - [x] Pipeline fast/deep, cache por etapa, resultados de metadata progressivos e labels en/pt-BR/es. Instrumentacao agregada Android/JS, sem dados pessoais. Ver docs/scan-pipeline.md para validacao e limites.
 
