@@ -496,7 +496,7 @@ export function LibraryScreen({
                 </Text>
               )}
               <Button
-                label={t('updateResults') + '  ?'}
+                label={t('updateResults')}
                 onPress={applySearch}
               />
             </View>
