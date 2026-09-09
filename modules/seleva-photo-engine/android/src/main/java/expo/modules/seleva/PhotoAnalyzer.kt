@@ -67,7 +67,7 @@ internal class PhotoAnalyzer(private val context: Context) {
     val analysis = mutableMapOf<String, Any>(
       "photoId" to id,
       "analysisVersion" to 1,
-      "modelVersion" to if (fastOnly) "android-fast-1" else "android-heuristic-1",
+      "modelVersion" to if (fastOnly) "android-fast-2" else "android-heuristic-2",
       "analyzedAt" to System.currentTimeMillis(),
     )
     if (bitmap == null) { profile.count("unavailable"); throw java.io.FileNotFoundException() }
@@ -128,17 +128,7 @@ internal class PhotoAnalyzer(private val context: Context) {
   }
 
   private fun perceptualHash(bitmap: Bitmap): String {
-    val values = grayscale(bitmap)
-    val average = values.average()
-    val result = StringBuilder(16)
-    for (block in 0 until 16) {
-      var value = 0
-      for (bit in 0 until 4) {
-        value = (value shl 1) or if (values[block * 4 + bit] >= average) 1 else 0
-      }
-      result.append("%x".format(value))
-    }
-    return result.toString()
+    return VisualHash.fromGrayscale(grayscale(bitmap, 8))
   }
 
   private fun blurScore(bitmap: Bitmap): Double {

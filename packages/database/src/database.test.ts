@@ -93,7 +93,7 @@ async function photo(id: string, favorite = 0, createdAt = 100, size = 1000) {
 }
 async function analysis(id: string, text: string) {
   await db.runAsync(
-    "INSERT INTO photo_analysis(photo_id,ocr_text,is_screenshot,analysis_version,model_version,analyzed_at) VALUES(?,?,1,1,'android-heuristic-1',100)",
+    "INSERT INTO photo_analysis(photo_id,ocr_text,is_screenshot,analysis_version,model_version,analyzed_at) VALUES(?,?,1,1,'android-heuristic-2',100)",
     id,
     text,
   );
@@ -328,6 +328,66 @@ it('removes trashed assets from the local index and records cleanup history', as
     ),
   ).toEqual([{ outcome: 'trashed', recovered_bytes: 2048 }]);
 });
+it('preserves visual groups after deep analysis and counts overlapping exact groups once', async () => {
+  for (const id of ['a', 'b', 'c']) await photo(id);
+  const rows = ['a', 'b', 'c'].map((photoId) => ({
+    photoId,
+    analysisVersion: 1,
+    modelVersion: 'android-fast-2',
+    analyzedAt: Date.now(),
+    perceptualHash: '0123456789abcdef',
+  }));
+  await repository.upsertAnalyses(rows);
+  await repository.rebuildClusters();
+  expect((await repository.getInsights()).similarPhotos).toBe(3);
+  await repository.upsertAnalyses(
+    rows.map((row) => ({
+      ...row,
+      modelVersion: 'android-heuristic-2',
+      contentHash: row.photoId === 'c' ? 'different' : 'same',
+    })),
+  );
+  await repository.rebuildClusters();
+  const similar = await repository.query(
+    queryPlanSchema.parse({
+      filters: { similar: true },
+      exclusions: { favorites: false },
+    }),
+    { limit: 10 },
+  );
+  expect(similar.assets.map((asset) => asset.id).sort()).toEqual([
+    'a',
+    'b',
+    'c',
+  ]);
+  expect((await repository.getInsights()).similarPhotos).toBe(3);
+  const exact = await db.getAllAsync<{ photo_id: string }>(
+    "SELECT m.photo_id FROM photo_cluster_members m JOIN photo_clusters c ON c.id=m.cluster_id WHERE c.kind='exact' ORDER BY m.photo_id",
+  );
+  expect(exact.map((row) => row.photo_id)).toEqual(['a', 'b']);
+});
+
+it('invalidates old Android hashes and never groups them with the new algorithm', async () => {
+  for (const id of ['android:1:p', 'android:2:p']) await photo(id);
+  await repository.upsertAnalyses(
+    ['android:1:p', 'android:2:p'].map((photoId, index) => ({
+      photoId,
+      analysisVersion: 1,
+      analyzedAt: Date.now(),
+      modelVersion: index === 0 ? 'android-heuristic-1' : 'android-fast-2',
+      perceptualHash: '0123456789abcdef',
+    })),
+  );
+  expect(
+    await repository.getPendingAnalysisIds(
+      ['android:1:p', 'android:2:p'],
+      true,
+    ),
+  ).toEqual(['android:1:p']);
+  await repository.rebuildClusters();
+  expect((await repository.getInsights()).similarPhotos).toBe(0);
+});
+
 it('reconciles assets removed from the device after a completed scan', async () => {
   await photo('old');
   await repository.upsertAssets(
@@ -434,7 +494,7 @@ it.each(['android', 'ios'])(
       {
         photoId: id,
         analysisVersion: 1,
-        modelVersion: `${platform}-fast-1`,
+        modelVersion: platform === 'ios' ? 'ios-fast-1' : 'android-fast-2',
         analyzedAt: Date.now(),
         blurScore: 0.7,
       },
@@ -446,7 +506,7 @@ it.each(['android', 'ios'])(
         photoId: id,
         analysisVersion: 1,
         modelVersion:
-          platform === 'ios' ? 'ios-vision-1' : 'android-heuristic-1',
+          platform === 'ios' ? 'ios-vision-1' : 'android-heuristic-2',
         analyzedAt: Date.now(),
         ocrText: 'receipt',
       },

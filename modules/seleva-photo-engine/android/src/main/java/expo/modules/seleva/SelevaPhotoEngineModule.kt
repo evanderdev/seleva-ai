@@ -11,6 +11,8 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class SelevaPhotoEngineModule : Module() {
+  private val trashRequestCode = 7314
+  private var pendingTrash: Pair<List<String>, Promise>? = null
   private val scanWorker = PhotoWorker("seleva-scan", background = true)
   private val thumbnailWorker = PhotoWorker("seleva-thumbnails")
   private val libraryWorker = PhotoWorker("seleva-library")
@@ -50,12 +52,25 @@ class SelevaPhotoEngineModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("SelevaPhotoEngine")
     OnDestroy {
+      pendingTrash?.second?.reject("UNKNOWN", "Module closed during trash confirmation", null)
+      pendingTrash = null
       scanner.close()
       scanWorker.close()
       thumbnailWorker.close()
       libraryWorker.close()
     }
     Events("scanBatch", "scanProgress", "scanCompleted", "scanFailed", "scanPaused", "scanCancelled")
+    OnActivityResult { _, result ->
+      if (result.requestCode == trashRequestCode) {
+        val pending = pendingTrash
+        pendingTrash = null
+        val confirmed = result.resultCode == android.app.Activity.RESULT_OK
+        pending?.second?.resolve(mapOf(
+          "trashedIds" to if (confirmed) pending.first else emptyList<String>(),
+          "cancelled" to !confirmed,
+        ))
+      }
+    }
     AsyncFunction("queryAssets") { limit: Int, cursor: String?, category: String, before: Double?, promise: Promise ->
       libraryOperation(promise) { it.listAssets(limit, cursor, category, before) }
     }.runOnQueue(libraryWorker.scope)
@@ -66,8 +81,32 @@ class SelevaPhotoEngineModule : Module() {
       libraryOperation(promise) { PhotoThumbnailStore(requireNotNull(appContext.reactContext)).thumbnail(id, size) }
     }.runOnQueue(thumbnailWorker.scope)
     AsyncFunction("trashAssets") { ids: List<String>, promise: Promise ->
-      libraryOperation(promise) { it.trashAssets(ids) }
-    }.runOnQueue(libraryWorker.scope)
+      val context = appContext.reactContext
+      val activity = appContext.currentActivity
+      if (context == null || activity == null || Build.VERSION.SDK_INT < 30) {
+        promise.reject("DEVICE_UNSUPPORTED", "System trash requires Android 11 and foreground activity", null)
+        return@AsyncFunction
+      }
+      if (pendingTrash != null) {
+        promise.reject("UNKNOWN", "Trash confirmation already active", null)
+        return@AsyncFunction
+      }
+      if (permission(context) !in listOf("authorized", "limited")) {
+        promise.reject("PERMISSION_DENIED", "Photo access required", null)
+        return@AsyncFunction
+      }
+      try {
+        val request = service(context).createTrashRequest(ids)
+        pendingTrash = ids.distinct() to promise
+        activity.startIntentSenderForResult(request.intentSender, trashRequestCode, null, 0, 0, 0)
+      } catch (_: SecurityException) {
+        pendingTrash = null
+        promise.reject("PERMISSION_DENIED", "Photo access required", null)
+      } catch (_: Exception) {
+        pendingTrash = null
+        promise.reject("UNKNOWN", "Unable to open system trash confirmation", null)
+      }
+    }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("startScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scanner.scan(appContext.reactContext, jobId, batchSize, cursor, false, promise) }.runOnQueue(scanWorker.scope)
     AsyncFunction("startFastScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scanner.scan(appContext.reactContext, jobId, batchSize, cursor, false, promise, true, true) }.runOnQueue(scanWorker.scope)

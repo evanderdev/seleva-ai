@@ -6,7 +6,6 @@ import android.content.Context
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.content.ContentValues
 
 /** Metadata pages only. Image pixels stay native; originals are never copied. */
 class PhotoLibraryService(private val context: Context) {
@@ -102,21 +101,20 @@ class PhotoLibraryService(private val context: Context) {
     return mutableMapOf<String, Any>("assets" to assets).apply { next?.let { put("nextCursor", it) } }
   }
 
-  fun trashAssets(ids: List<String>): Map<String, Any> {
+  fun createTrashRequest(ids: List<String>): android.app.PendingIntent {
     if (Build.VERSION.SDK_INT < 30) throw UnsupportedOperationException()
-    val trashed = mutableListOf<String>()
-    for (id in ids.distinct()) {
+    require(ids.isNotEmpty() && ids.size <= 500)
+    val uris = ids.distinct().map { id ->
       val match = Regex("android:([1-9][0-9]*):([pv])").matchEntire(id)
         ?: throw IllegalArgumentException("INVALID_ID")
       val assetId = match.groupValues[1].toLong()
       val video = match.groupValues[2] == "v"
-      val uri = ContentUris.withAppendedId(
+      ContentUris.withAppendedId(
         if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
         assetId,
       )
-      val values = ContentValues().apply { put(MediaStore.MediaColumns.IS_TRASHED, 1) }
-      if (context.contentResolver.update(uri, values, null, null) > 0) trashed.add(id)
     }
-    return mapOf("trashedIds" to trashed, "cancelled" to false)
+    // The OS performs only a reversible trash operation after its own confirmation.
+    return MediaStore.createTrashRequest(context.contentResolver, uris, true)
   }
 }

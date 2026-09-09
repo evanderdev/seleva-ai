@@ -44,7 +44,11 @@ export const en = {
   confirmMoveToTrashMessage:
     'Move {{count}} selected items to the device trash?',
   cancel: 'Cancel',
-  trashSafetyNote: 'You review every selected item before this action.',
+  trashSafetyNote: 'Items go to your device trash after system confirmation.',
+  trashUnavailable:
+    'System trash is unavailable on this device. Your items have been kept.',
+  trashError:
+    'Unable to complete the trash operation. Check your gallery before trying again.',
   indexedCount: '{{count}} items available in the local index.',
   librarySummary: 'Your local library',
   indexedMedia: 'indexed items',
@@ -52,7 +56,6 @@ export const en = {
   videosCount: '{{count}} videos',
   knownStorage: '{{size}} with known size',
   openLibrary: 'Open library',
-  deletePermanently: 'Delete permanently',
   actionsComingSoon:
     'Actions will be enabled after the native confirmation flow is connected.',
   appearance: 'Appearance',
@@ -200,7 +203,12 @@ export const ptBR: Messages = {
   confirmMoveToTrashMessage:
     'Mover {{count}} itens selecionados para a lixeira do dispositivo?',
   cancel: 'Cancelar',
-  trashSafetyNote: 'Você revisa cada item selecionado antes desta ação.',
+  trashSafetyNote:
+    'Os itens vão para a lixeira do celular após a confirmação do sistema.',
+  trashUnavailable:
+    'A lixeira do sistema não está disponível neste aparelho. Seus itens foram mantidos.',
+  trashError:
+    'Não foi possível concluir o envio à lixeira. Confira sua galeria antes de tentar novamente.',
   indexedCount: '{{count}} itens disponíveis no índice local.',
   librarySummary: 'Sua biblioteca local',
   indexedMedia: 'itens indexados',
@@ -209,7 +217,6 @@ export const ptBR: Messages = {
   knownStorage: '{{size}} com tamanho conhecido',
   openLibrary: 'Abrir biblioteca',
   moveToTrash: 'Mover seleção para a lixeira',
-  deletePermanently: 'Excluir permanentemente',
   actionsComingSoon:
     'As ações serão ativadas quando o fluxo nativo de confirmação estiver conectado.',
   appearance: 'Aparência',
@@ -360,7 +367,12 @@ export const es: Messages = {
   confirmMoveToTrashMessage:
     '¿Mover {{count}} elementos seleccionados a la papelera del dispositivo?',
   cancel: 'Cancelar',
-  trashSafetyNote: 'Revisas cada elemento seleccionado antes de esta acción.',
+  trashSafetyNote:
+    'Los elementos van a la papelera del dispositivo tras la confirmación del sistema.',
+  trashUnavailable:
+    'La papelera del sistema no está disponible en este dispositivo. Tus elementos se han conservado.',
+  trashError:
+    'No se pudo completar el envío a la papelera. Revisa tu galería antes de volver a intentarlo.',
   indexedCount: '{{count}} elementos disponibles en el índice local.',
   librarySummary: 'Tu biblioteca local',
   indexedMedia: 'elementos indexados',
@@ -369,7 +381,6 @@ export const es: Messages = {
   knownStorage: '{{size}} con tamaño conocido',
   openLibrary: 'Abrir biblioteca',
   moveToTrash: 'Mover selección a la papelera',
-  deletePermanently: 'Eliminar permanentemente',
   actionsComingSoon:
     'Las acciones se activarán cuando se conecte el flujo nativo de confirmación.',
   appearance: 'Apariencia',

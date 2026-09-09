@@ -1,5 +1,20 @@
 # Progressive scan refactor - 2026-09-08
 
+## Android correction - 2026-09-09
+
+Android now computes a 64-bit average hash from all pixels of an 8x8 thumbnail.
+The previous implementation sampled only the first 64 pixels of a 32x32 image.
+`android-fast-2` and `android-heuristic-2` invalidate Android v1 cache entries;
+iOS versions are unchanged. A first run with this build recalculates Android analyses.
+Exact and visual SQL groups are built independently, so completing SHA-256 does
+not remove visual matches. Visual groups separate algorithm generations; overlapping
+groups still count each photo once. Approximate Hamming grouping remains future work.
+
+Android trash now opens `MediaStore.createTrashRequest(..., true)` and waits for
+the system result before updating SQLite. Cancellation preserves selection/index;
+Android versions without system trash return unsupported without a delete fallback.
+The review modal owns its safe area and keeps the trash footer outside scroll content.
+
 ## Repository audit and previous flow
 
 `LibraryProvider` owns one foreground coordinator. Opening requests permission,

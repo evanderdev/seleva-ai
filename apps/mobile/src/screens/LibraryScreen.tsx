@@ -29,7 +29,7 @@ import {
   useTheme,
   type Palette,
 } from '@seleva/ui';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { planPrompt, promptSchema } from '../features/search/prompt';
 import { LibraryStatus } from '../features/library/LibraryStatus';
@@ -86,6 +86,7 @@ export function LibraryScreen({
   const [draft, setDraft] = useState(initialPrompt);
   const [editing, setEditing] = useState(false);
   const [invalid, setInvalid] = useState(false);
+  const trashInFlight = useRef(false);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   function editSearch() {
     setDraft(prompt);
@@ -219,6 +220,8 @@ export function LibraryScreen({
     useCallback(() => {
       void load();
       const subscription = AppState.addEventListener('change', (state) => {
+        // System trash confirmation temporarily backgrounds the Activity.
+        if (trashInFlight.current) return;
         ++generation.current;
         setPage({ assets: [] });
         setPreview(undefined);
@@ -503,220 +506,267 @@ export function LibraryScreen({
       <Modal
         visible={preview !== undefined}
         animationType="slide"
-        onRequestClose={() => setPreview(undefined)}
+        onRequestClose={() => {
+          if (!trashInFlight.current) setPreview(undefined);
+        }}
       >
-        {preview && (
-          <ScrollView
-            contentContainerStyle={styles.header}
-            style={styles.modal}
-          >
-            <Button
-              label={t('closePreview')}
-              onPress={() => setPreview(undefined)}
-            />
-            {selected.length > 0 && (
-              <ScrollView
-                horizontal
-                style={{ flexGrow: 0 }}
-                contentContainerStyle={{ gap: 8 }}
-              >
-                {page.assets
-                  .filter((asset) => selected.includes(asset.id))
-                  .map((asset) => (
-                    <Pressable
-                      key={asset.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('openPreview')}
-                      onPress={() => setPreview(asset)}
-                      style={{
-                        width: 64,
-                        height: 76,
-                        borderRadius: 12,
-                        overflow: 'hidden',
-                        borderWidth: 2,
-                        borderColor:
-                          asset.id === preview.id
-                            ? colors.selectionBorder
-                            : 'transparent',
-                      }}
-                    >
-                      <Thumbnail asset={asset} />
-                    </Pressable>
-                  ))}
-              </ScrollView>
-            )}
-            <Thumbnail asset={preview} expanded />
-            <Text style={{ color: colors.text }}>
-              {new Date(preview.createdAt).toLocaleDateString(i18n.language)}
-            </Text>
-            <Text style={{ color: colors.text }}>
-              {t('dimensions', {
-                width: preview.width,
-                height: preview.height,
-              })}
-            </Text>
-            {preview.fileSize !== undefined && (
-              <Text style={{ color: colors.text }}>
-                {t('sizeMB', {
-                  size: (preview.fileSize / 1048576).toLocaleString(
-                    i18n.language,
-                    { maximumFractionDigits: 1 },
-                  ),
-                })}
-              </Text>
-            )}
-            {preview.duration !== undefined && (
-              <Text style={{ color: colors.text }}>
-                {t('durationSeconds', {
-                  seconds: Math.round(preview.duration),
-                })}
-              </Text>
-            )}
-            {preview.isFavorite && (
-              <Text style={{ color: colors.text }}>
-                {t('filter_favorites')}
-              </Text>
-            )}
-            {(category === 'screenshots' ||
-              duplicate ||
-              similar ||
-              minBlur !== undefined ||
-              minFileSize !== undefined ||
-              before !== undefined ||
-              Boolean(ocrTerms?.length)) && (
-              <View style={styles.reasons}>
-                <Text style={styles.reasonTitle}>{t('whySelected')}</Text>
-                {category === 'screenshots' && (
-                  <Text style={{ color: colors.text }}>
-                    {t('reasonScreenshot')}
-                  </Text>
-                )}
-                {duplicate && (
-                  <Text style={{ color: colors.text }}>
-                    {t('reasonDuplicate')}
-                  </Text>
-                )}
-                {similar && (
-                  <Text style={{ color: colors.text }}>
-                    {t('reasonSimilar')}
-                  </Text>
-                )}
-                {minBlur !== undefined && (
-                  <Text style={{ color: colors.text }}>
-                    {t('reasonBlurry')}
-                  </Text>
-                )}
-                {minFileSize !== undefined && (
-                  <Text style={{ color: colors.text }}>
-                    {t('reasonLargeMedia')}
-                  </Text>
-                )}
-                {before !== undefined && (
-                  <Text style={{ color: colors.text }}>
-                    {t('reasonOldMedia')}
-                  </Text>
-                )}
-                {ocrTerms?.length ? (
-                  <Text style={{ color: colors.text }}>{t('reasonOcr')}</Text>
-                ) : null}
-              </View>
-            )}
-            {
-              <Button
-                label={t(
-                  selected.includes(preview.id)
-                    ? 'deselectPhoto'
-                    : 'selectPhoto',
-                )}
-                onPress={() => {
-                  setSelected((current) =>
-                    current.includes(preview.id)
-                      ? current.filter((id) => id !== preview.id)
-                      : [...current, preview.id],
-                  );
-                }}
-              />
-            }
-            {selected.length > 0 && (
+        <SafeAreaProvider>
+          <SafeAreaView style={styles.screen}>
+            {preview && (
               <>
-                <Button
-                  label={t('moveToTrash')}
-                  disabled={busy}
-                  onPress={() => {
-                    const ids = [...selected];
+                <View style={styles.reviewHeader}>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.reasonTitle}>
+                      {t('reviewSelection')}
+                    </Text>
+                    <Text style={{ color: colors.muted }}>
+                      {t('selectionCount', { count: selected.length })}
+                    </Text>
+                  </View>
+                  <IconButton
+                    name="close"
+                    label={t('closePreview')}
+                    onPress={() => {
+                      if (!trashInFlight.current) setPreview(undefined);
+                    }}
+                  />
+                </View>
+                <ScrollView
+                  contentContainerStyle={styles.reviewContent}
+                  style={styles.modal}
+                >
+                  {selected.length > 0 && (
+                    <ScrollView
+                      horizontal
+                      style={{ flexGrow: 0 }}
+                      contentContainerStyle={{ gap: 8 }}
+                    >
+                      {page.assets
+                        .filter((asset) => selected.includes(asset.id))
+                        .map((asset) => (
+                          <Pressable
+                            key={asset.id}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('openPreview')}
+                            accessibilityState={{
+                              selected: asset.id === preview.id,
+                            }}
+                            onPress={() => setPreview(asset)}
+                            style={{
+                              width: 64,
+                              height: 76,
+                              borderWidth: 2,
+                              borderColor:
+                                asset.id === preview.id
+                                  ? colors.selectionBorder
+                                  : 'transparent',
+                            }}
+                          >
+                            <Thumbnail asset={asset} />
+                          </Pressable>
+                        ))}
+                    </ScrollView>
+                  )}
+                  <Thumbnail asset={preview} expanded />
+                  <Text style={{ color: colors.text }}>
+                    {new Date(preview.createdAt).toLocaleDateString(
+                      i18n.language,
+                    )}
+                  </Text>
+                  <Text style={{ color: colors.text }}>
+                    {t('dimensions', {
+                      width: preview.width,
+                      height: preview.height,
+                    })}
+                  </Text>
+                  {preview.fileSize !== undefined && (
+                    <Text style={{ color: colors.text }}>
+                      {t('sizeMB', {
+                        size: (preview.fileSize / 1048576).toLocaleString(
+                          i18n.language,
+                          { maximumFractionDigits: 1 },
+                        ),
+                      })}
+                    </Text>
+                  )}
+                  {preview.duration !== undefined && (
+                    <Text style={{ color: colors.text }}>
+                      {t('durationSeconds', {
+                        seconds: Math.round(preview.duration),
+                      })}
+                    </Text>
+                  )}
+                  {preview.isFavorite && (
+                    <Text style={{ color: colors.text }}>
+                      {t('filter_favorites')}
+                    </Text>
+                  )}
+                  {(category === 'screenshots' ||
+                    duplicate ||
+                    similar ||
+                    minBlur !== undefined ||
+                    minFileSize !== undefined ||
+                    before !== undefined ||
+                    Boolean(ocrTerms?.length)) && (
+                    <View style={styles.reasons}>
+                      <Text style={styles.reasonTitle}>{t('whySelected')}</Text>
+                      {category === 'screenshots' && (
+                        <Text style={{ color: colors.text }}>
+                          {t('reasonScreenshot')}
+                        </Text>
+                      )}
+                      {duplicate && (
+                        <Text style={{ color: colors.text }}>
+                          {t('reasonDuplicate')}
+                        </Text>
+                      )}
+                      {similar && (
+                        <Text style={{ color: colors.text }}>
+                          {t('reasonSimilar')}
+                        </Text>
+                      )}
+                      {minBlur !== undefined && (
+                        <Text style={{ color: colors.text }}>
+                          {t('reasonBlurry')}
+                        </Text>
+                      )}
+                      {minFileSize !== undefined && (
+                        <Text style={{ color: colors.text }}>
+                          {t('reasonLargeMedia')}
+                        </Text>
+                      )}
+                      {before !== undefined && (
+                        <Text style={{ color: colors.text }}>
+                          {t('reasonOldMedia')}
+                        </Text>
+                      )}
+                      {ocrTerms?.length ? (
+                        <Text style={{ color: colors.text }}>
+                          {t('reasonOcr')}
+                        </Text>
+                      ) : null}
+                    </View>
+                  )}
+                  {
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      label={t(
+                        selected.includes(preview.id)
+                          ? 'deselectPhoto'
+                          : 'selectPhoto',
+                      )}
+                      onPress={() => {
+                        setSelected((current) =>
+                          current.includes(preview.id)
+                            ? current.filter((id) => id !== preview.id)
+                            : [...current, preview.id],
+                        );
+                      }}
+                    />
+                  }
+                  <Text style={styles.placeholder}>{t('previewHint')}</Text>
+                </ScrollView>
+                <View style={styles.reviewFooter}>
+                  {selected.length > 0 && (
+                    <>
+                      <Button
+                        label={t('moveToTrash')}
+                        disabled={busy}
+                        onPress={() => {
+                          const ids = [...selected];
 
-                    Alert.alert(
-                      t('confirmMoveToTrashTitle'),
-                      t('confirmMoveToTrashMessage', { count: ids.length }),
-                      [
-                        { text: t('cancel'), style: 'cancel' },
-                        {
-                          text: t('moveToTrash'),
-                          style: 'destructive',
-                          onPress: () => {
-                            void (async () => {
-                              setBusy(true);
-                              try {
-                                const result =
-                                  await libraryReader.trashAssets?.({
-                                    ids,
-                                    userConfirmed: true,
-                                  });
-                                if (!result || !result.ok) {
-                                  setError(
-                                    result && !result.ok
-                                      ? result.error
-                                      : 'DEVICE_UNSUPPORTED',
-                                  );
-                                  setBusy(false);
-                                  return;
-                                }
-                                await repository.removeAssets(
-                                  result.value.trashedIds,
-                                );
-                                await repository.recordCleanup(
-                                  result.value.trashedIds,
-                                  page.assets
-                                    .filter((asset) =>
-                                      result.value.trashedIds.includes(
-                                        asset.id,
-                                      ),
-                                    )
-                                    .reduce(
-                                      (sum, asset) =>
-                                        sum + (asset.fileSize ?? 0),
-                                      0,
-                                    ),
-                                  result.value.cancelled
-                                    ? 'cancelled'
-                                    : 'trashed',
-                                );
-                                setSelected([]);
-                                setPreview(undefined);
-                                setBusy(false);
-                                void load();
-                              } catch {
-                                setError('UNKNOWN');
-                                setBusy(false);
-                              }
-                            })();
-                          },
-                        },
-                      ],
-                    );
-                  }}
-                />
-                <Text style={styles.placeholder}>{t('trashSafetyNote')}</Text>
+                          Alert.alert(
+                            t('confirmMoveToTrashTitle'),
+                            t('confirmMoveToTrashMessage', {
+                              count: ids.length,
+                            }),
+                            [
+                              { text: t('cancel'), style: 'cancel' },
+                              {
+                                text: t('moveToTrash'),
+                                style: 'destructive',
+                                onPress: () => {
+                                  if (trashInFlight.current) return;
+                                  trashInFlight.current = true;
+                                  void (async () => {
+                                    setBusy(true);
+                                    setError(undefined);
+                                    try {
+                                      const result =
+                                        await libraryReader.trashAssets?.({
+                                          ids,
+                                          userConfirmed: true,
+                                        });
+                                      if (!result || !result.ok) {
+                                        setError(
+                                          result && !result.ok
+                                            ? result.error
+                                            : 'DEVICE_UNSUPPORTED',
+                                        );
+                                        setBusy(false);
+                                        return;
+                                      }
+                                      if (result.value.cancelled) return;
+                                      await repository.removeAssets(
+                                        result.value.trashedIds,
+                                      );
+                                      await repository.recordCleanup(
+                                        result.value.trashedIds,
+                                        page.assets
+                                          .filter((asset) =>
+                                            result.value.trashedIds.includes(
+                                              asset.id,
+                                            ),
+                                          )
+                                          .reduce(
+                                            (sum, asset) =>
+                                              sum + (asset.fileSize ?? 0),
+                                            0,
+                                          ),
+                                        result.value.cancelled
+                                          ? 'cancelled'
+                                          : 'trashed',
+                                      );
+                                      setSelected([]);
+                                      setPreview(undefined);
+                                      setBusy(false);
+                                      void load();
+                                    } catch {
+                                      setError('UNKNOWN');
+                                    } finally {
+                                      trashInFlight.current = false;
+                                      setBusy(false);
+                                    }
+                                  })();
+                                },
+                              },
+                            ],
+                          );
+                        }}
+                      />
+                      <Text style={styles.placeholder}>
+                        {t('trashSafetyNote')}
+                      </Text>
+                    </>
+                  )}
+                  {error && (
+                    <Text
+                      accessibilityRole="alert"
+                      style={{ color: colors.text }}
+                    >
+                      {t(
+                        error === 'DEVICE_UNSUPPORTED'
+                          ? 'trashUnavailable'
+                          : 'trashError',
+                      )}
+                    </Text>
+                  )}
+                </View>
               </>
             )}
-            {error && (
-              <Text accessibilityRole="alert" style={{ color: colors.text }}>
-                {t('libraryReadError')}
-              </Text>
-            )}
-            <Text style={styles.placeholder}>{t('previewHint')}</Text>
-          </ScrollView>
-        )}
+          </SafeAreaView>
+        </SafeAreaProvider>
       </Modal>
     </SafeAreaView>
   );
@@ -762,9 +812,27 @@ const createStyles = (colors: Palette) =>
     title: { fontSize: 28, color: colors.text, fontWeight: '700' },
     filters: { gap: 8 },
     modal: {
-      padding: 24,
-      paddingTop: 48,
+      flex: 1,
       backgroundColor: colors.background,
+    },
+    reviewHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderColor: colors.border,
+    },
+    reviewContent: { padding: 20, gap: 14 },
+    reviewFooter: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 16,
+      gap: 12,
+      backgroundColor: colors.surface,
+      borderTopWidth: 1,
+      borderColor: colors.border,
     },
     placeholder: { color: colors.muted, textAlign: 'center', fontSize: 12 },
     reasons: {

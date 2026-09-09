@@ -8,6 +8,9 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 ## ⚠️ Regras Estritas
 
+- Android (2026-09-09): hash visual usa aHash de thumbnail 8x8 cobrindo a imagem inteira. `android-fast-2`/`android-heuristic-2` substituem as versões Android v1 no nativo e no predicado de cache; iOS permanece v1. Grupos exact e visual são independentes, com hashes visuais separados por geração; SHA-256 não substitui associação visual. Contagens usam IDs distintos.
+- Lixeira Android: somente `MediaStore.createTrashRequest(..., true)` e resultado do SO; nunca usar exclusão permanente como fallback. Android < 11 retorna indisponível. A revisão usa SafeAreaProvider/SafeAreaView dentro do Modal, conteúdo rolável e rodapé fixo. AppState não pode limpar a seleção enquanto a confirmação da lixeira está em andamento; cancelar preserva seleção e índice.
+
 - Home: manter um único módulo “Fotos parecidas”, incluindo cópias exatas e semelhanças visuais. O filtro `similar` inclui clusters exact/visual/similar; `duplicate` permanece disponível para buscas específicas. Não reintroduzir dois cards sobrepostos.
 
 - SQLite/FTS (2026-09-08): abrir `seleva.db` com `finalizeUnusedStatementsBeforeClosing: false`, opção herdada pelas transações exclusivas. A limpeza automática do Expo SQLite pode finalizar statements internos do FTS duas vezes ao fechar a conexão, causando corrupção de memória/SIGSEGV (Expo #38168). `runAsync`/`getAllAsync` já finalizam seus statements; uso futuro de `prepareAsync` exige `finally`. Preservar APIs assíncronas e ACK após commit. Ver `docs/database.md`.
@@ -54,6 +57,8 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - Resultados mostram contagem e seleção da página (até 60 itens), sem apresentar essa contagem como total global. Prévia e confirmação do SO continuam obrigatórias para lixeira.
 
 ## Estado Atual das Features
+
+- [x] Correções Android de hash visual completo e preservação de clusters após deep; revisão com área segura e ação principal única de lixeira, confirmação nativa e mensagens en/pt-BR/es. Sem dependência nova ou migration. Testes SQLite de regressão e testes JVM do hash adicionados.
 
 - [x] Progresso dedicado em `/progress` (2026-09-09), aberto pelo status “Processando fotos e vídeos…” na Home: etapa atual, contagem e percentual por etapa, estados de pausa/erro/conclusão e retomada. Consome LibraryProvider sem iniciar outro scan; traduções en/pt-BR/es. Fotos parecidas mostra COUNT(DISTINCT photo id) de clusters exact/visual/similar com mais de um membro, somente fotos, incluindo favoritas como a galeria. Sem migration. Typecheck, lint e 73 testes passaram; validação visual no aparelho pendente.
 

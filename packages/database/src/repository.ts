@@ -36,12 +36,12 @@ interface ScanJobRow {
   updated_at: number;
   error: string | null;
 }
-// Complete v1 analyses also satisfy the fast stage. Fast-only rows never satisfy deep work.
+// Full analyses satisfy fast work too. Android v2 fixes whole-image visual hashing.
 function pendingForStage(fastOnly = false): string {
   const complete =
-    "CASE WHEN p.id LIKE 'ios:%' THEN 'ios-vision-1' ELSE 'android-heuristic-1' END";
+    "CASE WHEN p.id LIKE 'ios:%' THEN 'ios-vision-1' ELSE 'android-heuristic-2' END";
   const fast =
-    "CASE WHEN p.id LIKE 'ios:%' THEN 'ios-fast-1' ELSE 'android-fast-1' END";
+    "CASE WHEN p.id LIKE 'ios:%' THEN 'ios-fast-1' ELSE 'android-fast-2' END";
   return `(a.photo_id IS NULL OR a.analyzed_at < COALESCE(p.modified_at,0)
     OR a.analysis_version != 1 OR COALESCE(a.model_version,'') NOT IN (${complete}${fastOnly ? `,${fast}` : ''}))`;
 }
@@ -201,14 +201,27 @@ export class PhotoRepository {
     await this.db.withExclusiveTransactionAsync(async (tx) => {
       await tx.runAsync('DELETE FROM photo_cluster_members');
       await tx.runAsync('DELETE FROM photo_clusters');
-      await tx.runAsync(`INSERT INTO photo_clusters(id,kind,representative_id)
-        SELECT 'cluster-' || CASE WHEN content_hash IS NOT NULL THEN 'exact:' ELSE 'visual:' END || COALESCE(content_hash,perceptual_hash),
-          CASE WHEN content_hash IS NOT NULL THEN 'exact' ELSE 'visual' END, MIN(photo_id)
-        FROM photo_analysis WHERE COALESCE(content_hash,perceptual_hash) IS NOT NULL
-        GROUP BY CASE WHEN content_hash IS NOT NULL THEN 'exact' ELSE 'visual' END, COALESCE(content_hash,perceptual_hash) HAVING COUNT(*) > 1`);
-      await tx.runAsync(`INSERT INTO photo_cluster_members(cluster_id,photo_id)
-        SELECT c.id,a.photo_id FROM photo_analysis a JOIN photo_clusters c ON c.id =
-          'cluster-' || CASE WHEN a.content_hash IS NOT NULL THEN 'exact:' ELSE 'visual:' END || COALESCE(a.content_hash,a.perceptual_hash)`);
+      // Independent groups: completing SHA-256 must never replace visual membership.
+      // Keep algorithm generations separate while Android v1 rows are refreshed.
+      for (const [kind, column] of [
+        ['exact', 'content_hash'],
+        ['visual', 'perceptual_hash'],
+      ] as const) {
+        const key =
+          kind === 'visual'
+            ? `CASE WHEN a.model_version IN ('android-fast-2','android-heuristic-2') THEN 'android-v2:' ELSE 'legacy:' END || a.${column}`
+            : `a.${column}`;
+        await tx.runAsync(`INSERT INTO photo_clusters(id,kind,representative_id)
+          SELECT 'cluster-${kind}:' || ${key}, '${kind}', MIN(a.photo_id)
+          FROM photo_analysis a JOIN photos p ON p.id=a.photo_id
+          WHERE a.${column} IS NOT NULL AND a.${column} != ''
+            AND a.analyzed_at >= COALESCE(p.modified_at,0)
+          GROUP BY ${key} HAVING COUNT(*) > 1`);
+        await tx.runAsync(`INSERT INTO photo_cluster_members(cluster_id,photo_id)
+          SELECT c.id,a.photo_id FROM photo_analysis a JOIN photos p ON p.id=a.photo_id
+          JOIN photo_clusters c ON c.id = 'cluster-${kind}:' || ${key}
+          WHERE a.analyzed_at >= COALESCE(p.modified_at,0)`);
+      }
     });
   }
 
