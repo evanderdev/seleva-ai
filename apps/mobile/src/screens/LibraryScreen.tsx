@@ -260,57 +260,67 @@ export function LibraryScreen({
             <Text style={[layout.body, { color: colors.muted }]}>
               {t('foundDescription')}
             </Text>
-            <View
-              style={[
-                layout.row,
-                { flexWrap: 'wrap', marginTop: 10, marginBottom: 18 },
-              ]}
-            >
+            <View style={styles.filterBar}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={t('removeFilter')}
-                onPress={clearFilter}
-                style={[
-                  layout.row,
-                  {
-                    maxWidth: '100%',
-                    backgroundColor: colors.primary,
-                    borderRadius: 22,
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                  },
+                accessibilityLabel={t('editFilter')}
+                accessibilityState={{ expanded: editing }}
+                onPress={editSearch}
+                style={({ pressed }) => [
+                  styles.filterEdit,
+                  { opacity: pressed ? 0.6 : 1 },
                 ]}
               >
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    color: colors.onPrimary,
-                    fontSize: 12,
-                    maxWidth: '85%',
-                  }}
-                >
-                  {prompt ||
-                    t(
-                      duplicate
-                        ? 'findDuplicates'
-                        : similar
-                          ? 'similarPhotos'
-                          : minBlur !== undefined
-                            ? 'findBlurry'
-                            : minFileSize !== undefined
-                              ? 'largeVideos'
-                              : before
-                                ? 'olderThanYear'
-                                : 'filter_' + category,
-                    )}
-                </Text>
-                <Icon name="close" color={colors.onPrimary} size={14} />
+                <Icon name="search" size={18} color={colors.selectionBorder} />
+                <View style={{ flex: 1, gap: 5 }}>
+                  <Text style={{ color: colors.muted, fontSize: 11 }}>
+                    {t('editFilter')}
+                  </Text>
+                  <Text
+                    numberOfLines={2}
+                    style={{
+                      color: colors.text,
+                      fontSize: 14,
+                      lineHeight: 20,
+                      fontWeight: '500',
+                    }}
+                  >
+                    {prompt ||
+                      t(
+                        duplicate
+                          ? 'findDuplicates'
+                          : similar
+                            ? 'similarPhotos'
+                            : minBlur !== undefined
+                              ? 'findBlurry'
+                              : minFileSize !== undefined
+                                ? 'largeVideos'
+                                : before
+                                  ? 'olderThanYear'
+                                  : 'filter_' + category,
+                      )}
+                  </Text>
+                </View>
+                <View style={styles.filterAffordance}>
+                  <Icon name="arrow" color={colors.text} size={16} />
+                </View>
               </Pressable>
-              <Button
-                variant="outline"
-                label={t('editFilter') + '  ?'}
-                onPress={editSearch}
-              />
+              {prompt ||
+              category !== 'all' ||
+              before !== undefined ||
+              minFileSize !== undefined ||
+              duplicate ||
+              similar ||
+              minBlur !== undefined ||
+              ocrTerms?.length ? (
+                <View style={styles.filterClear}>
+                  <IconButton
+                    name="close"
+                    label={t('removeFilter')}
+                    onPress={clearFilter}
+                  />
+                </View>
+              ) : null}
             </View>
             <View style={[layout.row, { justifyContent: 'space-between' }]}>
               <View style={{ gap: 6 }}>
@@ -716,6 +726,39 @@ const createStyles = (colors: Palette) =>
     screen: { flex: 1, backgroundColor: colors.background },
     content: { ...layout.content, paddingTop: 24, gap: 10 },
     header: { gap: 14, marginBottom: 16 },
+    filterBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 20,
+      marginTop: 6,
+      marginBottom: 12,
+    },
+    filterEdit: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      minHeight: 72,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    filterAffordance: {
+      width: 30,
+      height: 30,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.selected,
+      borderRadius: 10,
+      transform: [{ rotate: '90deg' }],
+    },
+    filterClear: {
+      borderLeftWidth: 1,
+      borderColor: colors.border,
+      marginRight: 4,
+    },
     title: { fontSize: 28, color: colors.text, fontWeight: '700' },
     filters: { gap: 8 },
     modal: {
