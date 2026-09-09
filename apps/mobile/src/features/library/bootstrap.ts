@@ -59,25 +59,29 @@ export function createLibraryBootstrap(deps: Dependencies) {
   let forceRefresh = false;
   let requested = false;
   let refresh: Promise<void> | undefined;
+  let lastInsightsAt = 0;
   const publish = (next: Partial<LibraryState>) => {
     state = { ...state, ...next };
     listeners.forEach((listener) => listener());
   };
   const updateInsights = async (force = false) => {
+    if (!force && state.resultsAvailable && Date.now() - lastInsightsAt < 1000)
+      return;
     if (refresh) {
       await refresh;
       if (!force) return;
     }
     refresh = deps.repository
       .getInsights()
-      .then((insights) =>
+      .then((insights) => {
+        lastInsightsAt = Date.now();
         publish({
           insights,
           revision: state.revision + 1,
           resultsAvailable:
             state.resultsAvailable || insights.total > insights.pending,
-        }),
-      )
+        });
+      })
       .finally(() => {
         refresh = undefined;
       });
@@ -178,9 +182,7 @@ export function createLibraryBootstrap(deps: Dependencies) {
             if (!active) void deps.stop(job.id);
           },
           onCommitted: () => {
-            void updateInsights(true).catch(() =>
-              publish({ error: 'UNKNOWN' }),
-            );
+            void updateInsights().catch(() => publish({ error: 'UNKNOWN' }));
           },
         });
         await updateInsights(true);

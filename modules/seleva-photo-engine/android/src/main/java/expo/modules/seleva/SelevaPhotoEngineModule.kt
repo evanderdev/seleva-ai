@@ -9,23 +9,13 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
-import java.util.concurrent.Executors
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicReference
 
 class SelevaPhotoEngineModule : Module() {
-  private val scanDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-  private val thumbnailDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-  private val scanScope = CoroutineScope(SupervisorJob() + scanDispatcher)
-  private val thumbnailScope = CoroutineScope(SupervisorJob() + thumbnailDispatcher)
+  private val scanWorker = PhotoWorker("seleva-scan", background = true)
+  private val thumbnailWorker = PhotoWorker("seleva-thumbnails")
+  private val libraryWorker = PhotoWorker("seleva-library")
+  private val scanner = PhotoScanRunner(::permission) { name, body -> sendEvent(name, body) }
   private var libraryService: PhotoLibraryService? = null
-  private val scanAcks = ConcurrentHashMap<String, java.util.concurrent.Semaphore>()
-  private val scanSelections = ConcurrentHashMap<String, Set<String>>()
-  private val scanStops = ConcurrentHashMap<String, AtomicReference<String?>>()
   @Synchronized private fun service(context: Context): PhotoLibraryService =
     libraryService ?: PhotoLibraryService(context).also { libraryService = it }
 
@@ -57,131 +47,44 @@ class SelevaPhotoEngineModule : Module() {
     return if (requested) "denied" else "not-determined"
   }
 
-  private fun scan(jobId: String, batchSize: Int, cursor: String?, metadataOnly: Boolean, promise: Promise, incremental: Boolean = false) {
-      val context = appContext.reactContext
-      if (context == null) {
-        promise.reject("DEVICE_UNSUPPORTED", "Context unavailable", null)
-        return
-      }
-      if (jobId.isBlank() || batchSize !in 1..200) {
-        promise.reject("INVALID_SCAN", "Invalid scan request", null)
-        return
-      }
-      if (permission(context) !in listOf("authorized", "limited")) {
-        promise.reject("PERMISSION_DENIED", "Photo access required", null)
-        return
-      }
-      val stop = AtomicReference<String?>(null)
-      scanStops[jobId] = stop
-      val ack = java.util.concurrent.Semaphore(0)
-      scanAcks[jobId] = ack
-      try {
-        val service = service(context)
-        val total = service.countAssets()
-        var processed = 0
-        var nextCursor = cursor
-        while (true) {
-          val page = service.listAssets(batchSize, nextCursor)
-          @Suppress("UNCHECKED_CAST")
-          val assets = page["assets"] as? List<Map<String, Any>> ?: emptyList()
-          val pageCursor = page["nextCursor"] as? String
-          var selected = assets
-          if (incremental) {
-            sendEvent("scanBatch", mapOf("jobId" to jobId, "assets" to assets,
-              "analyses" to emptyList<Map<String, Any>>(), "requiresAnalysis" to true,
-              "processed" to processed, "total" to total, "cursor" to nextCursor))
-            if (!ack.tryAcquire(60, java.util.concurrent.TimeUnit.SECONDS)) throw IllegalStateException("INDEX_WRITE_TIMEOUT")
-            val ids = scanSelections.remove(jobId) ?: emptySet()
-            selected = if (stop.get() == null) assets.filter { it["id"] in ids } else emptyList()
-          }
-          val analyses = if (metadataOnly) emptyList<Map<String, Any>>() else service.analyzeAssets(selected)
-          processed += assets.size
-          sendEvent("scanBatch", mapOf(
-            "jobId" to jobId,
-            "assets" to assets,
-            "analyses" to analyses,
-            "processed" to processed,
-            "total" to total,
-            "cursor" to pageCursor,
-          ))
-          sendEvent("scanProgress", mapOf(
-            "jobId" to jobId,
-            "processed" to processed,
-            "total" to total,
-            "progress" to if (total == 0) 1.0 else processed.toDouble() / total.toDouble(),
-            "cursor" to pageCursor,
-          ))
-          if (!ack.tryAcquire(60, java.util.concurrent.TimeUnit.SECONDS)) throw IllegalStateException("INDEX_WRITE_TIMEOUT")
-          nextCursor = pageCursor
-          val requested = stop.get()
-          if (requested == "paused") {
-            sendEvent("scanPaused", mapOf("jobId" to jobId, "processed" to processed, "total" to total, "cursor" to nextCursor))
-            promise.resolve(mapOf("jobId" to jobId, "status" to "paused", "cursor" to nextCursor))
-            return
-          }
-          if (requested == "cancelled") {
-            sendEvent("scanCancelled", mapOf("jobId" to jobId, "processed" to processed, "total" to total, "cursor" to nextCursor))
-            promise.resolve(mapOf("jobId" to jobId, "status" to "cancelled", "cursor" to nextCursor))
-            return
-          }
-          if (pageCursor == null || assets.isEmpty()) break
-        }
-        sendEvent("scanCompleted", mapOf("jobId" to jobId, "processed" to processed, "total" to total, "cursor" to null))
-        promise.resolve(mapOf("jobId" to jobId, "status" to "completed", "processed" to processed, "total" to total))
-      } catch (_: SecurityException) {
-        sendEvent("scanFailed", mapOf("jobId" to jobId, "error" to "PERMISSION_DENIED"))
-        promise.reject("PERMISSION_DENIED", "Photo access required", null)
-      } catch (_: Exception) {
-        sendEvent("scanFailed", mapOf("jobId" to jobId, "error" to "UNKNOWN"))
-        promise.reject("UNKNOWN", "Library scan failed", null)
-      } finally {
-        scanStops.remove(jobId)
-        scanAcks.remove(jobId)
-        scanSelections.remove(jobId)
-      }
-  }
-
   override fun definition() = ModuleDefinition {
     Name("SelevaPhotoEngine")
     OnDestroy {
-      scanStops.values.forEach { it.set("cancelled") }
-      scanAcks.values.forEach { it.release() }
-      scanScope.cancel()
-      thumbnailScope.cancel()
-      scanDispatcher.close()
-      thumbnailDispatcher.close()
+      scanner.close()
+      scanWorker.close()
+      thumbnailWorker.close()
+      libraryWorker.close()
     }
     Events("scanBatch", "scanProgress", "scanCompleted", "scanFailed", "scanPaused", "scanCancelled")
     AsyncFunction("queryAssets") { limit: Int, cursor: String?, category: String, before: Double?, promise: Promise ->
       libraryOperation(promise) { it.listAssets(limit, cursor, category, before) }
-    }
+    }.runOnQueue(libraryWorker.scope)
     AsyncFunction("listAssets") { limit: Int, cursor: String?, promise: Promise ->
       libraryOperation(promise) { it.listAssets(limit, cursor) }
-    }
+    }.runOnQueue(libraryWorker.scope)
     AsyncFunction("getThumbnail") { id: String, size: Int, promise: Promise ->
-      libraryOperation(promise) { it.thumbnail(id, size) }
-    }.runOnQueue(thumbnailScope)
+      libraryOperation(promise) { PhotoThumbnailStore(requireNotNull(appContext.reactContext)).thumbnail(id, size) }
+    }.runOnQueue(thumbnailWorker.scope)
     AsyncFunction("trashAssets") { ids: List<String>, promise: Promise ->
       libraryOperation(promise) { it.trashAssets(ids) }
-    }
+    }.runOnQueue(libraryWorker.scope)
 
-    AsyncFunction("startScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, false, promise) }.runOnQueue(scanScope)
-    AsyncFunction("startIncrementalScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, false, promise, true) }.runOnQueue(scanScope)
+    AsyncFunction("startScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scanner.scan(appContext.reactContext, jobId, batchSize, cursor, false, promise) }.runOnQueue(scanWorker.scope)
+    AsyncFunction("startIncrementalScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scanner.scan(appContext.reactContext, jobId, batchSize, cursor, false, promise, true) }.runOnQueue(scanWorker.scope)
     AsyncFunction("selectScanAssets") { jobId: String, ids: List<String> ->
-      require(ids.size <= 200 && ids.all { it.isNotBlank() })
-      if (scanAcks.containsKey(jobId)) { scanSelections[jobId] = ids.toSet(); scanAcks[jobId]?.release() }
+      scanner.select(jobId, ids)
       Unit
     }.runOnQueue(Queues.MAIN)
-    AsyncFunction("startMetadataScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scan(jobId, batchSize, cursor, true, promise) }.runOnQueue(scanScope)
+    AsyncFunction("startMetadataScan") { jobId: String, batchSize: Int, cursor: String?, promise: Promise -> scanner.scan(appContext.reactContext, jobId, batchSize, cursor, true, promise) }.runOnQueue(scanWorker.scope)
 
-    AsyncFunction("acknowledgeScanBatch") { jobId: String -> scanAcks[jobId]?.release(); Unit }.runOnQueue(Queues.MAIN)
+    AsyncFunction("acknowledgeScanBatch") { jobId: String -> scanner.acknowledge(jobId); Unit }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("stopScan") { jobId: String, mode: String, promise: Promise ->
       if (mode != "paused" && mode != "cancelled") {
         promise.reject("INVALID_SCAN", "Invalid stop mode", null)
         return@AsyncFunction
       }
-      scanStops[jobId]?.set(mode)
+      scanner.stop(jobId, mode)
       promise.resolve(mapOf("jobId" to jobId, "mode" to mode))
     }.runOnQueue(Queues.MAIN)
 

@@ -256,3 +256,43 @@ it('makes cached analyzed items available before resuming remaining work', async
   await controller.start();
   expect(scan.mock.calls[0]?.[0].metadataOnly).toBe(false);
 });
+
+it('coalesces batch notifications while an insights query is in flight', async () => {
+  const { controller, scan, getInsights } = setup('authorized');
+  let finish: ((job: ScanJob) => void) | undefined;
+  let committed: (() => void) | undefined;
+  scan.mockImplementation((options) =>
+    options.metadataOnly
+      ? Promise.resolve(completed)
+      : new Promise((resolve) => {
+          finish = resolve;
+          committed = options.onCommitted;
+        }),
+  );
+  const work = controller.start();
+  for (let i = 0; i < 40 && !finish; i++) await Promise.resolve();
+  expect(committed).toBeDefined();
+  let resolveInsights: ((value: LibraryInsights) => void) | undefined;
+  getInsights.mockClear();
+  getInsights.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveInsights = resolve;
+      }),
+  );
+  for (let i = 0; i < 100; i++) committed?.();
+  expect(getInsights).toHaveBeenCalledTimes(1);
+  resolveInsights?.({ ...insights, pending: 2 });
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(getInsights).toHaveBeenCalledTimes(1);
+  expect(controller.getSnapshot().resultsAvailable).toBe(true);
+  for (let i = 0; i < 100; i++) committed?.();
+  expect(getInsights).toHaveBeenCalledTimes(1);
+  getInsights.mockResolvedValue({ ...insights, pending: 0 });
+  finish?.(completed);
+  await work;
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'ready',
+    insights: { pending: 0 },
+  });
+});
