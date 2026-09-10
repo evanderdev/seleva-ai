@@ -818,6 +818,15 @@ export function LibraryScreen({
                                         return;
                                       }
                                       if (result.value.cancelled) return;
+                                      await Promise.all(
+                                        result.value.trashedIds.map((id) =>
+                                          repository.recordCleanupFeedback(
+                                            id,
+                                            'trash',
+                                            'trashed',
+                                          ),
+                                        ),
+                                      );
                                       await repository.removeAssets(
                                         result.value.trashedIds,
                                       );
