@@ -11,9 +11,9 @@ import type {
   Selection,
   SelectionContext,
 } from '@seleva/core';
-import { searchRequestSchema, expressionToStructuredPlan } from '@seleva/core';
+import { searchRequestSchema, expressionToStructuredPlan, CapabilityResolver, CapabilityRegistry, SearchComposition, manifestPlugins } from '@seleva/core';
 import type { SqlDatabase } from './connection';
-import { buildPhotoQuery } from './query';
+import { SqlCandidateIndex, createSqlCapabilityPlugins } from './search-index';
 
 interface PhotoRow {
   id: string;
@@ -484,41 +484,19 @@ export class PhotoRepository {
     };
   }
   async query(plan: SearchRequest, page: PageRequest): Promise<AssetPage> {
-    const query = buildPhotoQuery(plan, page);
-    const rows = await this.db.getAllAsync<PhotoRow>(
-      query.sql,
-      ...query.params,
-    );
-    const hasMore =
-      rows.length > query.limit &&
-      (plan.target?.maxResults === undefined || query.remaining > query.limit);
-    const visible = rows.slice(0, query.limit);
-    const assets: PhotoAsset[] = visible.map((row) => ({
-      id: row.id,
-      mediaType: row.media_type,
-      createdAt: row.created_at,
-      width: row.width,
-      height: row.height,
-      modifiedAt: row.modified_at ?? undefined,
-      duration: row.duration ?? undefined,
-      fileSize: row.file_size ?? undefined,
-      isFavorite: row.favorite === 1,
-      latitude: row.latitude ?? undefined,
-      longitude: row.longitude ?? undefined,
-    }));
-    const last = visible.at(-1);
-    return {
-      assets,
-      nextCursor:
-        hasMore && last
-          ? JSON.stringify({
-              value: last.sort_value,
-              id: last.id,
-              query: query.fingerprint,
-              consumed: query.consumed + visible.length,
-            })
-          : undefined,
-    };
+    const index = new SqlCandidateIndex(this.db);
+    const sqlPlugins = createSqlCapabilityPlugins(index);
+    const sqlById = new Map(sqlPlugins.map(plugin => [plugin.manifest.id, plugin]));
+    const plugins = manifestPlugins().map(plugin => sqlById.get(plugin.manifest.id) ?? plugin);
+    const registry = new CapabilityRegistry();
+    plugins.forEach(plugin => registry.register(plugin));
+    const structured = expressionToStructuredPlan(plan.expression);
+    if (structured.exclusions?.albums || structured.exclusions?.importantPeople) throw new Error('UNSUPPORTED_EXCLUSION');
+    if (structured.filters?.people || structured.filters?.places || structured.filters?.sceneLabels || structured.filters?.source) throw new Error('UNSUPPORTED_ENTITY_FILTER');
+    const runtime = { platform: 'android' as const, osVersion: 36, permissions: [], models: [], nativeApis: [], resources: 'normal' as const };
+    const result = await new SearchComposition(new CapabilityResolver(registry), index).execute(searchRequestSchema.parse(plan), page, { runtime });
+    if (result.report.unavailable.length) throw new Error('UNSUPPORTED_QUERY');
+    return { assets: result.assets, nextCursor: result.nextCursor };
   }
 
   async getCleanupCandidates(

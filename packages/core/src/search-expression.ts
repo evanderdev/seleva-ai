@@ -65,7 +65,7 @@ export function structuredPlanToExpression(plan: StructuredSearchPlan): SearchEx
     const capability = key === 'before' || key === 'after' ? 'query.date' : key === 'ocrTerms' ? 'text.ocr' : key === 'screenshot' ? 'content.screenshot' : key === 'duplicate' ? 'duplicate.exact' : key === 'similar' ? 'similarity.perceptual' : key === 'maxQuality' || key === 'minBlur' ? 'quality.visual' : 'metadata.core';
     children.push(predicate(capability, map[key] ?? 'eq', jsonValue({ field: key, value })));
   }
-  const exclusions = plan.exclusions ?? {};
+  const exclusions = plan.exclusions ?? { favorites: true };
   for (const [key, value] of Object.entries(exclusions)) if (value === true || (Array.isArray(value) && value.length)) {
     const capability = key === 'screenshots' ? 'content.screenshot' : key === 'labels' ? 'visual.labels' : 'metadata.core';
     children.push({ type: 'not', child: predicate(capability, key === 'labels' ? 'containsAny' : 'eq', jsonValue({ field: key, value })) });
