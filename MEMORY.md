@@ -81,7 +81,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 - [x] Correções Android de hash visual completo e preservação de clusters após deep; revisão com área segura e ação principal única de lixeira, confirmação nativa e mensagens en/pt-BR/es. Sem dependência nova ou migration. Testes SQLite de regressão e testes JVM do hash adicionados.
 
-- [x] Progresso dedicado em `/progress` (2026-09-09), aberto pelo status “Processando fotos e vídeos…” na Home: etapa atual, contagem e percentual por etapa, estados de pausa/erro/conclusão e retomada. Consome LibraryProvider sem iniciar outro scan; traduções en/pt-BR/es. Fotos parecidas mostra COUNT(DISTINCT photo id) de clusters exact/visual/similar com mais de um membro, somente fotos, incluindo favoritas como a galeria. Sem migration. Typecheck, lint e 73 testes passaram; validação visual no aparelho pendente.
+- [x] Progresso dedicado em `/progress` (2026-09-09), aberto pelo status “Processando fotos e vídeos…” na Home: mostra a descrição da etapa em andamento, contagem e percentual por etapa, estados de pausa/erro/conclusão e retomada. Consome LibraryProvider sem iniciar outro scan; traduções en/pt-BR/es. Fotos parecidas mostra COUNT(DISTINCT photo id) de clusters exact/visual/similar com mais de um membro, somente fotos, incluindo favoritas como a galeria. Sem migration. Typecheck, lint e 73 testes passaram; validação visual no aparelho pendente.
 
 - [x] Home simplificada (2026-09-08): pergunta e prompt no topo, módulos de Fotos e Vídeos separados abaixo e status discreto, substituindo o resumo técnico antes do prompt. Entrada suave e resposta ao toque com Animated nativo, respeitando movimento reduzido; mantém tokens claros/escuros e messages en/pt-BR/es. Sem dependências novas. Validação visual e fluidez em aparelho pendentes.
 
@@ -200,6 +200,7 @@ O APK anterior falhava antes do JavaScript porque `expo.modules.ExpoModulesPacka
 - Seleções salvas agora aparecem na Home, no mesmo grid das categorias, com nome e quantidade de itens.
 - A navegação envia somente o `selectionId`; a página de resultados recupera a seleção pelo SQLite e pagina seus membros em blocos de 60.
 - A seleção salva continua podendo ser revisada e explicitamente enviada à lixeira. Ao editar ou limpar o filtro, o fluxo volta para uma consulta normal.
+- Cada seleção salva pode ser excluída na Home após confirmação. A exclusão remove somente os registros locais da seleção e seus membros, mantendo fotos e vídeos intactos.
 
 ## Implementação do refinamento do engine (2026-09-10)
 

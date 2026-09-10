@@ -1,5 +1,6 @@
 ﻿import { useCallback, useState } from 'react';
 import {
+  Alert,
   Animated,
   Pressable,
   ScrollView,
@@ -111,6 +112,28 @@ export function AssistantScreen() {
         notice: result.notice ? '1' : undefined,
       },
     });
+  }
+  function confirmDeleteSelection(selection: Selection) {
+    Alert.alert(
+      t('deleteSavedSelectionTitle'),
+      t('deleteSavedSelectionMessage', { name: selection.name }),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('deleteSavedSelection'),
+          style: 'destructive',
+          onPress: () => {
+            void repository.deleteSelection(selection.id).then((deleted) => {
+              if (deleted) {
+                setSavedSelections((current) =>
+                  current.filter(({ id }) => id !== selection.id),
+                );
+              }
+            });
+          },
+        },
+      ],
+    );
   }
   function sectionHeader(label: string, category: 'photos' | 'videos') {
     return (
@@ -271,15 +294,48 @@ export function AssistantScreen() {
             </View>
             <View style={styles.grid}>
               {savedSelections.map((selection) => (
-                <SummaryCard
+                <View
                   key={selection.id}
-                  label={selection.name}
-                  detail={t('savedSelectionItems', {
-                    count: selection.assetIds.length,
-                  })}
-                  icon="check"
-                  params={{ selectionId: selection.id }}
-                />
+                  style={[
+                    styles.savedSelection,
+                    { backgroundColor: colors.subtle, borderColor: colors.border },
+                  ]}
+                >
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={selection.name}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/library',
+                        params: { selectionId: selection.id },
+                      })
+                    }
+                    style={styles.savedSelectionOpen}
+                  >
+                    <Icon name="check" size={22} color={colors.selectionBorder} />
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: colors.text, fontSize: 14, fontWeight: '500', marginTop: 14 }}
+                    >
+                      {selection.name}
+                    </Text>
+                    <Text style={{ color: colors.muted, fontSize: 12, marginTop: 5 }}>
+                      {t('savedSelectionItems', { count: selection.assetIds.length })}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('deleteSavedSelection')}
+                    onPress={() => confirmDeleteSelection(selection)}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.deleteSelection,
+                      { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
+                    ]}
+                  >
+                    <Icon name="close" size={16} color={colors.muted} />
+                  </Pressable>
+                </View>
               ))}
             </View>
           </Reveal>
@@ -355,6 +411,25 @@ const styles = StyleSheet.create({
     rowGap: 12,
   },
   card: { padding: 16, borderRadius: 20, borderWidth: 1, minHeight: 135 },
+  savedSelection: {
+    width: '48%',
+    minHeight: 135,
+    borderRadius: 20,
+    borderWidth: 1,
+    position: 'relative',
+  },
+  savedSelectionOpen: { flex: 1, padding: 16 },
+  deleteSelection: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 28,
+    height: 28,
+    borderWidth: 1,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   videoCard: {
     flexDirection: 'row',
     alignItems: 'center',

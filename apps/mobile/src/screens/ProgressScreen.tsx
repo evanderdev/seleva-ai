@@ -49,7 +49,7 @@ export function ProgressScreen() {
           accessibilityRole="header"
           style={[layout.title, { color: colors.text }]}
         >
-          {t(stage)}
+          {t('progressTitle')}
         </Text>
         <Text style={[layout.body, { color: colors.muted }]}>
           {t(busy ? 'progressHint' : 'progressSaved')}
@@ -65,8 +65,8 @@ export function ProgressScreen() {
               backgroundColor: colors.surface,
             }}
           >
-            <Text style={{ color: colors.muted, fontSize: 12 }}>
-              {t('progressStage')}
+            <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>
+              {t(stage)}
             </Text>
             {total > 0 ? (
               <>
@@ -81,7 +81,7 @@ export function ProgressScreen() {
                 </Text>
                 <View
                   accessibilityRole="progressbar"
-                  accessibilityLabel={t('progressStage')}
+                  accessibilityLabel={t(stage)}
                   accessibilityValue={{ min: 0, max: total, now: processed }}
                   style={{
                     height: 5,

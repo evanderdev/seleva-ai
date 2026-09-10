@@ -113,6 +113,18 @@ it('persists saved selections and removes duplicate asset ids', async () => {
   await expect(repository.saveSelection(' ', ['a'])).rejects.toThrow('INVALID_SELECTION_NAME');
   await expect(repository.saveSelection('Empty', [])).rejects.toThrow('EMPTY_SELECTION');
 });
+it('deletes a saved selection without deleting its photo records', async () => {
+  await photo('a');
+  const saved = await repository.saveSelection('Temporary', ['a']);
+
+  await expect(repository.deleteSelection(saved.id)).resolves.toBe(true);
+  await expect(repository.getSelection(saved.id)).resolves.toBeUndefined();
+  await expect(repository.getSelections()).resolves.toEqual([]);
+  await expect(repository.getAssetsByIds(['a'])).resolves.toMatchObject({
+    assets: [{ id: 'a' }],
+  });
+  await expect(repository.deleteSelection(saved.id)).resolves.toBe(false);
+});
 
 async function photo(id: string, favorite = 0, createdAt = 100, size = 1000) {
   await db.runAsync(

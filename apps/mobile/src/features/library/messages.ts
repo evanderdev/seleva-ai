@@ -1,7 +1,6 @@
 export const libraryEn = {
   viewProgress: 'View processing progress',
   progressTitle: 'Processing progress',
-  progressStage: 'Current step',
   progressReading: 'Finding photos and videos',
   progressOpening: 'Preparing to process your library',
   progressHint:
@@ -61,7 +60,6 @@ export const libraryEn = {
 export const libraryPt: Record<keyof typeof libraryEn, string> = {
   viewProgress: 'Ver progresso do processamento',
   progressTitle: 'Progresso do processamento',
-  progressStage: 'Etapa atual',
   progressReading: 'Encontrando fotos e vídeos',
   progressOpening: 'Preparando sua biblioteca para análise',
   progressHint:
@@ -124,7 +122,6 @@ export const libraryPt: Record<keyof typeof libraryEn, string> = {
 export const libraryEs: Record<keyof typeof libraryEn, string> = {
   viewProgress: 'Ver progreso del procesamiento',
   progressTitle: 'Progreso del procesamiento',
-  progressStage: 'Paso actual',
   progressReading: 'Encontrando fotos y vídeos',
   progressOpening: 'Preparando tu biblioteca para analizarla',
   progressHint:

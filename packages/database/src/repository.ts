@@ -163,6 +163,12 @@ export class PhotoRepository {
     return row ? this.hydrateSelection(row) : undefined;
   }
 
+  async deleteSelection(id: string): Promise<boolean> {
+    if (!(await this.getSelection(id))) return false;
+    await this.db.runAsync('DELETE FROM saved_selections WHERE id=?', id);
+    return true;
+  }
+
   async getAssetsByIds(ids: string[]): Promise<AssetPage> {
     const unique = [...new Set(ids)].filter(Boolean);
     if (!unique.length) return { assets: [] };
