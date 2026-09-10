@@ -1,6 +1,6 @@
 import { LibraryScreen } from '../src/screens/LibraryScreen';
 import { useLocalSearchParams } from 'expo-router';
-import { queryPlanSchema, type QueryPlan } from '@seleva/core';
+import { searchRequestSchema, type SearchRequest } from '@seleva/core';
 export default function Library() {
   const params = useLocalSearchParams<{
     prompt?: string;
@@ -35,11 +35,11 @@ export default function Library() {
   const ocrTerms = params.ocrTerms
     ? params.ocrTerms.split(',').filter((term) => term.length >= 1)
     : undefined;
-  let query: QueryPlan | undefined;
+  let query: SearchRequest | undefined;
   let invalidQuery = false;
   if (params.query) {
     try {
-      query = queryPlanSchema.parse(JSON.parse(params.query));
+      query = searchRequestSchema.parse(JSON.parse(params.query));
     } catch {
       invalidQuery = true;
     }

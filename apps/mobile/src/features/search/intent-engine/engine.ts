@@ -1,5 +1,5 @@
 import { deterministicProvider } from './deterministic';
-import { createSelectionContext, reduceSelectionContext } from '@seleva/core';
+import { createSelectionContext, reduceSelectionContext, searchRequestSchema, structuredPlanToExpression } from '@seleva/core';
 import { normalizer } from './normalizer';
 import { planner } from './planner';
 import {
@@ -85,10 +85,7 @@ export function createIntentEngine(
             }
             // Semantic concepts can enrich a query, never invent destructive actions.
             const suggestion = candidate.data;
-            const filters = {
-              ...suggestion.query.filters,
-              ...intent.query.filters,
-            };
+            const filters = { ...(intent.query.filters ?? {}), ...(suggestion.query.filters ?? {}) };
             intent = intentSchema.parse({
               ...intent,
               query: { ...intent.query, filters },
@@ -112,13 +109,12 @@ export function createIntentEngine(
         }
       }
       measure('semanticDuration');
-      if (intent.cleanupCandidate || intent.destructive)
-        intent.query.exclusions.favorites = true;
+      if (intent.cleanupCandidate || intent.destructive) intent.query.exclusions = { ...(intent.query.exclusions ?? {}), favorites: true };
       const operation = intent.operation ?? (intent.action === 'refine' ? 'restrict' : 'new');
+      const request = searchRequestSchema.parse({ expression: structuredPlanToExpression(intent.query), target: intent.query.target, ranking: intent.query.ranking ? { capability: 'quality.visual', strategy: intent.query.ranking.strategy } : undefined });
       const selectionContext = operation === 'new' && !context.selectionContext
-        ? createSelectionContext(intent.query)
-        : reduceSelectionContext(context.selectionContext, operation, intent.query);
-      intent.query = selectionContext.query;
+        ? createSelectionContext(request)
+        : reduceSelectionContext(context.selectionContext, operation, request);
       intent = intentSchema.parse(intent);
       measure('validationDuration');
       const negativeOrUnion =
@@ -135,6 +131,9 @@ export function createIntentEngine(
             requiresReview: true as const,
           }
         : await (config.planner ?? planner).createPlan(intent);
+      const expression = selectionContext.query.expression;
+      plan.expression = expression;
+      plan.query = selectionContext.query;
       measure('plannerDuration');
       durations.totalDuration = performance.now() - started;
       // Aggregated, privacy-safe timings. No prompt text or photo metadata is recorded.
@@ -148,6 +147,7 @@ export function createIntentEngine(
         normalized,
         interpretation: { intent, confidence },
         plan,
+        expression,
         selectionContext,
         ...(config.debug
           ? { debug: { semanticUsed, degraded, matches, durations } }

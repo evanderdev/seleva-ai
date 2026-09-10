@@ -1,4 +1,4 @@
-import { queryPlanSchema } from '@seleva/core';
+import { searchRequestSchema, structuredPlanToExpression } from '@seleva/core';
 import { intentSchema, type IntentPlanner, type PlanNotice } from './types';
 
 export const planner: IntentPlanner = {
@@ -8,9 +8,9 @@ export const planner: IntentPlanner = {
     if (intent.bestShot) notices.push('bestShotUnavailable');
     if (['organize', 'compare', 'keep'].includes(intent.action))
       notices.push('actionUnavailable');
-    const query = queryPlanSchema.parse(intent.query);
-    if (query.filters?.people?.length || query.filters?.places?.length || query.filters?.sceneLabels?.length || query.filters?.source)
-      notices.push('filterUnavailable');
+    const expression = structuredPlanToExpression(intent.query);
+    const query = searchRequestSchema.parse({ expression, target: intent.query.target, ranking: intent.query.ranking ? { capability: 'quality.visual', strategy: intent.query.ranking.strategy } : undefined });
+    if (intent.query.filters?.people || intent.query.filters?.places || intent.query.filters?.sceneLabels || intent.query.filters?.source) notices.push('filterUnavailable');
     // Classification labels are not populated with these semantic categories yet.
     if (intent.concepts.length || notices.length) {
       return { status: 'unsupported', notices, requiresReview: true };
@@ -18,15 +18,15 @@ export const planner: IntentPlanner = {
     if (intent.cleanupCandidate) notices.push('cleanupRankingUnavailable');
     if (intent.freeSpace || intent.query.target?.minSpaceToRecover)
       notices.push('spaceTargetUnavailable');
-    const constrained = Object.values(query.filters ?? {}).some(
+    const constrained = Object.values(intent.query.filters ?? {}).some(
       (value) => value !== undefined,
     );
     if (!constrained && (intent.cleanupCandidate || intent.freeSpace)) {
       return { status: 'clarification', notices, requiresReview: true };
     }
     if (
-      query.ranking?.strategy === 'least-important' ||
-      query.ranking?.strategy === 'most-redundant'
+      intent.query.ranking?.strategy === 'least-important' ||
+      intent.query.ranking?.strategy === 'most-redundant'
     ) {
       return { status: 'unsupported', notices, requiresReview: true };
     }

@@ -1,20 +1,20 @@
 import { createSelectionContext, reduceSelectionContext } from './index';
+import { predicate } from './search-expression';
 
-describe('SelectionContext reducer', () => {
-  it('accumulates restrictions and excludes without mutating the prior context', () => {
-    const first = reduceSelectionContext(undefined, 'new', { filters: { screenshot: true } });
-    const second = reduceSelectionContext(first, 'restrict', { filters: { before: 2025 } });
-    const third = reduceSelectionContext(second, 'exclude', { filters: { favorite: true } });
-    expect(first.query.filters?.before).toBeUndefined();
-    expect(second.query.filters).toMatchObject({ screenshot: true, before: 2025 });
-    expect(third.query.exclusions.favorites).toBe(true);
+describe('composable SelectionContext', () => {
+  it('accumulates AND restrictions and explicit exclusions', () => {
+    const first = reduceSelectionContext(undefined, 'new', { expression: predicate('content.screenshot', 'eq', true) });
+    const second = reduceSelectionContext(first, 'restrict', { expression: predicate('query.date', 'before', { field: 'before', value: 2025 }) });
+    const third = reduceSelectionContext(second, 'exclude', { expression: predicate('metadata.core', 'eq', { field: 'favorite', value: true }) });
+    expect(first.query.expression.type).toBe('predicate');
+    expect(second.query.expression.type).toBe('and');
+    expect(third.query.expression.type).toBe('and');
   });
-
-  it('removes a restriction and broadens date ranges', () => {
-    const context = createSelectionContext({ filters: { before: 2025, after: 2020, screenshot: true } });
-    const removed = reduceSelectionContext(context, 'remove', { filters: { screenshot: true } });
-    const broadened = reduceSelectionContext(removed, 'broaden', { filters: { before: 2026, after: 2018 } });
-    expect(removed.query.filters?.screenshot).toBeUndefined();
-    expect(broadened.query.filters).toMatchObject({ before: 2026, after: 2018 });
+  it('removes a predicate and broadens with OR', () => {
+    const context = createSelectionContext({ expression: { type: 'and', children: [predicate('content.screenshot', 'eq', true), predicate('query.date', 'before', { field: 'before', value: 2025 })] } });
+    const removed = reduceSelectionContext(context, 'remove', { expression: predicate('content.screenshot', 'eq', true) });
+    const broadened = reduceSelectionContext(removed, 'broaden', { expression: predicate('query.date', 'after', { field: 'after', value: 2018 }) });
+    expect(removed.query.expression.type).toBe('and');
+    expect(broadened.query.expression.type).toBe('or');
   });
 });

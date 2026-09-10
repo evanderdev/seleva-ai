@@ -1,5 +1,10 @@
 import { createIntentEngine } from './intent-engine/engine';
 import { promptSchema } from './prompt';
+import { expressionToStructuredPlan } from '@seleva/core';
+
+function filtersOf(query: { expression: Parameters<typeof expressionToStructuredPlan>[0] } | undefined) {
+  return query ? expressionToStructuredPlan(query.expression).filters as Record<string, unknown> | undefined : undefined;
+}
 
 const engine = createIntentEngine();
 const now = new Date(2026, 8, 9, 12);
@@ -11,11 +16,11 @@ describe('Seleva Intent Engine', () => {
     'buscar fotos borrosas',
   ])('uses canonical filters across languages: %s', async (text) => {
     const result = await engine.interpret({ text, context: { now } });
-    expect(result.plan.query?.filters).toMatchObject({
+    expect(filtersOf(result.plan.query)).toMatchObject({
       mediaTypes: ['photo'],
       minBlur: 0.55,
     });
-    expect(result.plan.query?.filters?.ocrTerms).toBeUndefined();
+    expect(filtersOf(result.plan.query)?.ocrTerms).toBeUndefined();
   });
 
   it('preserves a meaningful quoted OCR term', async () => {
@@ -23,7 +28,7 @@ describe('Seleva Intent Engine', () => {
       text: 'encontre prints "Jira"',
       context: { now },
     });
-    expect(result.plan.query?.filters).toMatchObject({
+    expect(filtersOf(result.plan.query)).toMatchObject({
       screenshot: true,
       ocrTerms: ['jira'],
     });
@@ -47,7 +52,7 @@ describe('Seleva Intent Engine', () => {
       text: 'show screenshots from yesterday',
       context: { now },
     });
-    expect(result.plan.query?.filters).toMatchObject({
+    expect(filtersOf(result.plan.query)).toMatchObject({
       screenshot: true,
       after: new Date(2026, 8, 8).getTime() - 1,
       before: new Date(2026, 8, 9).getTime(),
@@ -59,8 +64,8 @@ describe('Seleva Intent Engine', () => {
       text: 'prints piano',
       context: { now },
     });
-    expect(result.plan.query?.filters?.before).toBeUndefined();
-    expect(result.plan.query?.filters?.ocrTerms).toEqual(['piano']);
+    expect(filtersOf(result.plan.query)?.before).toBeUndefined();
+    expect(filtersOf(result.plan.query)?.ocrTerms).toEqual(['piano']);
   });
 
   it('never sends an unsupported semantic output to the planner', async () => {
@@ -91,7 +96,7 @@ describe('Seleva Intent Engine', () => {
     ['buscar capturas de pantalla', { screenshot: true }],
   ])('golden corpus keeps multilingual intent stable: %s', async (text, expected) => {
     const result = await engine.interpret({ text, context: { now } });
-    expect(result.plan.query?.filters).toMatchObject(expected);
+    expect(filtersOf(result.plan.query)).toMatchObject(expected);
     expect(result.normalized.originalText).toBe(text);
   });
 
@@ -107,6 +112,6 @@ describe('Seleva Intent Engine', () => {
       text: 'refine before 2025',
       context: { now, selectionContext: first.selectionContext },
     });
-    expect(second.plan.query?.filters).toMatchObject({ screenshot: true, before: new Date(2025, 0, 1).getTime() });
+    expect(filtersOf(second.plan.query)).toMatchObject({ screenshot: true, before: new Date(2025, 0, 1).getTime() });
   });
 });

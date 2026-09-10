@@ -1,11 +1,12 @@
-import {
-  pageRequestSchema,
-  queryPlanSchema,
-  type QueryPlan,
-  type PageRequest,
-} from '@seleva/core';
+import { pageRequestSchema, searchRequestSchema, expressionToStructuredPlan, type SearchRequest, type PageRequest } from '@seleva/core';
 import { z } from 'zod';
 import type { SqlValue } from './connection';
+
+interface SqlFilters {
+  before?: number; after?: number; mediaTypes?: Array<'photo' | 'video'>; screenshot?: boolean; favorite?: boolean; duplicate?: boolean; similar?: boolean; hasFaces?: boolean;
+  labels?: string[]; ocrTerms?: string[]; maxQuality?: number; minBlur?: number; minFileSize?: number; people?: string[]; places?: string[]; sceneLabels?: string[]; source?: string;
+}
+interface SqlExclusions { favorites?: boolean; albums?: string[]; importantPeople?: boolean; screenshots?: boolean; labels?: string[]; }
 
 const cursorSchema = z.strictObject({
   value: z.number(),
@@ -13,8 +14,10 @@ const cursorSchema = z.strictObject({
   query: z.string(),
   consumed: z.number().int().nonnegative(),
 });
-export function buildPhotoQuery(input: QueryPlan, request: PageRequest) {
-  const plan = queryPlanSchema.parse(input);
+export function buildPhotoQuery(input: SearchRequest, request: PageRequest) {
+  const requestPlan = searchRequestSchema.parse(input);
+  const structured = expressionToStructuredPlan(requestPlan.expression);
+  const plan: { target?: SearchRequest['target']; ranking?: { strategy: string }; filters?: SqlFilters; exclusions: SqlExclusions } = { target: requestPlan.target, ranking: requestPlan.ranking, filters: structured.filters as SqlFilters | undefined, exclusions: { favorites: true, ...(structured.exclusions as SqlExclusions | undefined) } };
   const page = pageRequestSchema.parse(request);
   if (plan.exclusions.albums?.length || plan.exclusions.importantPeople)
     throw new Error('UNSUPPORTED_EXCLUSION');

@@ -1,3 +1,8 @@
+﻿import { searchRequestSchema, type SearchRequest } from './search-expression';
+export * from './search-expression';
+export * from './capabilities';
+export * from './composition';
+export * from './capability-catalog';
 import { z } from 'zod';
 
 export interface PhotoAsset {
@@ -21,10 +26,10 @@ export interface Label { name: string; confidence?: number; }
 export interface OCRText { text: string; language?: string; confidence?: number; }
 export type QualitySignalKind = 'blur' | 'brightness' | 'contrast' | 'face' | 'resolution' | 'noise' | 'composition';
 export interface QualitySignal { kind: QualitySignalKind; score: number; }
-export interface Selection { id: string; name: string; assetIds: string[]; query?: QueryPlan; context?: SelectionContext; createdAt: number; updatedAt: number; }
+export interface Selection { id: string; name: string; assetIds: string[]; query?: SearchRequest; context?: SelectionContext; createdAt: number; updatedAt: number; }
 export type SelectionOperation = 'new' | 'add' | 'restrict' | 'exclude' | 'remove' | 'replace' | 'broaden';
-export interface SelectionContext { query: QueryPlan; operations: SelectionOperation[]; }
-export interface SearchIntent { kind: 'search' | 'refine'; query: QueryPlan; operation?: SelectionOperation; }
+export interface SelectionContext { query: SearchRequest; operations: SelectionOperation[]; }
+export interface SearchIntent { kind: 'search' | 'refine'; query: SearchRequest; operation?: SelectionOperation; }
 export type GalleryAction = 'trash' | 'share' | 'favorite' | 'unfavorite' | 'save-selection';
 export interface ActionIntent { action: GalleryAction; selectionId?: string; requiresConfirmation: true; }
 
@@ -153,68 +158,10 @@ export const scanOptionsSchema = z.strictObject({
 export type ScanOptions = z.infer<typeof scanOptionsSchema>;
 
 const timestamp = z.number().int().nonnegative();
-const score = z.number().min(0).max(1);
-export const queryPlanSchema = z.strictObject({
-  target: z
-    .strictObject({
-      minSpaceToRecover: z.number().int().positive().optional(),
-      maxResults: z.number().int().positive().optional(),
-    })
-    .optional(),
-  filters: z
-    .strictObject({
-      before: timestamp.optional(),
-      after: timestamp.optional(),
-      mediaTypes: z.array(z.enum(['photo', 'video'])).optional(),
-      screenshot: z.boolean().optional(),
-      favorite: z.boolean().optional(),
-      duplicate: z.boolean().optional(),
-      similar: z.boolean().optional(),
-      hasFaces: z.boolean().optional(),
-      labels: z.array(z.string().min(1)).optional(),
-      ocrTerms: z.array(z.string().min(1)).optional(),
-      maxQuality: score.optional(),
-      minBlur: score.optional(),
-      minFileSize: z.number().int().nonnegative().optional(),
-      people: z.array(z.string().min(1)).optional(),
-      places: z.array(z.string().min(1)).optional(),
-      sceneLabels: z.array(z.string().min(1)).optional(),
-      source: z.string().min(1).optional(),
-    })
-    .refine(
-      (filters) =>
-        filters.before === undefined ||
-        filters.after === undefined ||
-        filters.after < filters.before,
-      { message: 'INVALID_DATE_RANGE' },
-    )
-    .optional(),
-  exclusions: z
-    .strictObject({
-      favorites: z.boolean().default(true),
-      albums: z.array(z.string()).optional(),
-      importantPeople: z.boolean().optional(),
-      screenshots: z.boolean().optional(),
-      labels: z.array(z.string().min(1)).optional(),
-    })
-    .default({ favorites: true }),
-  ranking: z
-    .strictObject({
-      strategy: z.enum([
-        'largest',
-        'worst-quality',
-        'most-redundant',
-        'least-important',
-      ]),
-    })
-    .optional(),
-});
-export type QueryPlan = z.infer<typeof queryPlanSchema>;
-export type PhotoQueryPlan = QueryPlan;
 export const selectionOperationSchema = z.enum(['new', 'add', 'restrict', 'exclude', 'remove', 'replace', 'broaden']);
-export const searchIntentSchema = z.strictObject({ kind: z.enum(['search', 'refine']), query: queryPlanSchema, operation: selectionOperationSchema.optional() });
-export const selectionContextSchema = z.strictObject({ query: queryPlanSchema, operations: z.array(selectionOperationSchema) });
-export const selectionSchema = z.strictObject({ id: z.string().min(1), name: z.string().trim().min(1).max(120), assetIds: z.array(z.string().min(1)), query: queryPlanSchema.optional(), context: selectionContextSchema.optional(), createdAt: timestamp, updatedAt: timestamp });
+export const searchIntentSchema = z.strictObject({ kind: z.enum(['search', 'refine']), query: searchRequestSchema, operation: selectionOperationSchema.optional() });
+export const selectionContextSchema = z.strictObject({ query: searchRequestSchema, operations: z.array(selectionOperationSchema) });
+export const selectionSchema = z.strictObject({ id: z.string().min(1), name: z.string().trim().min(1).max(120), assetIds: z.array(z.string().min(1)), query: searchRequestSchema.optional(), context: selectionContextSchema.optional(), createdAt: timestamp, updatedAt: timestamp });
 export { createSelectionContext, reduceSelectionContext } from './selection-context';
 export const actionIntentSchema = z.strictObject({ action: z.enum(['trash', 'share', 'favorite', 'unfavorite', 'save-selection']), selectionId: z.string().min(1).optional(), requiresConfirmation: z.literal(true) });
 export type CleanupReason =
@@ -250,7 +197,7 @@ export interface AssetPage {
 }
 export type PaginatedPhotos = AssetPage;
 export interface PhotoQuery {
-  plan: QueryPlan;
+  plan: SearchRequest;
   page: PageRequest;
 }
 export interface ThumbnailOptions {
@@ -275,7 +222,7 @@ export interface PhotoEngine {
   resumeScan(id: string): Promise<EngineResult<ScanJob>>;
   cancelScan(id: string): Promise<EngineResult<ScanJob>>;
   getAssets(
-    query: QueryPlan,
+    query: SearchRequest,
     page: PageRequest,
   ): Promise<EngineResult<AssetPage>>;
   getThumbnail(
@@ -286,5 +233,5 @@ export interface PhotoEngine {
 }
 
 export interface IntentProvider {
-  parse(prompt: string, locale: string): Promise<QueryPlan>;
+  parse(prompt: string, locale: string): Promise<SearchRequest>;
 }

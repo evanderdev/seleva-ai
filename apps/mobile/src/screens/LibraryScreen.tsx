@@ -34,7 +34,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { usePromptInterpreter } from '../features/search/usePromptInterpreter';
 import { LibraryStatus } from '../features/library/LibraryStatus';
 import { usePhotoRepository } from '../services/database';
-import type { QueryPlan, SelectionContext } from '@seleva/core';
+import { searchRequestSchema, structuredPlanToExpression, type SearchRequest, type SelectionContext } from '@seleva/core';
 import { LibraryGridItem } from '../features/library/components/LibraryGridItem';
 import { Thumbnail } from '../features/library/components/Thumbnail';
 
@@ -63,7 +63,7 @@ export function LibraryScreen({
   initialMinBlur?: number;
   initialOcrTerms?: string[];
   initialPrompt?: string;
-  initialQuery?: QueryPlan;
+  initialQuery?: SearchRequest;
   initialSelectionId?: string;
   initialQueryInvalid?: boolean;
   initialIntentNotice?: boolean;
@@ -232,7 +232,7 @@ export function LibraryScreen({
         }
         const result = canUseIndex
           ? await (async () => {
-              const filters: NonNullable<QueryPlan['filters']> = {};
+              const filters: { mediaTypes?: Array<'photo' | 'video'>; screenshot?: boolean; favorite?: boolean; before?: number; minFileSize?: number; duplicate?: boolean; similar?: boolean; minBlur?: number; ocrTerms?: string[] } = {};
               if (category === 'photos') filters.mediaTypes = ['photo'];
               if (category === 'videos') filters.mediaTypes = ['video'];
               if (category === 'screenshots') filters.screenshot = true;
@@ -243,11 +243,7 @@ export function LibraryScreen({
               if (similar) filters.similar = true;
               if (minBlur !== undefined) filters.minBlur = minBlur;
               if (ocrTerms?.length) filters.ocrTerms = ocrTerms;
-              const page = await repository.query(
-                intentQuery ?? {
-                  filters,
-                  exclusions: { favorites: false },
-                },
+              const page = await repository.query(intentQuery ?? searchRequestSchema.parse({ expression: structuredPlanToExpression({ filters, exclusions: { favorites: false } }) }),
                 { limit: 60, cursor },
               );
               return { ok: true as const, value: page };

@@ -2,7 +2,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from './migrations';
 import { PhotoRepository } from './repository';
 import type { SqlConnection, SqlDatabase, SqlValue } from './connection';
-import { queryPlanSchema } from '@seleva/core';
+import { searchRequestSchema, structuredPlanToExpression } from '@seleva/core';
+const queryPlanSchema = { parse: (value: { filters?: Record<string, unknown>; exclusions?: Record<string, unknown>; target?: { maxResults?: number }; ranking?: { strategy: string } }) => searchRequestSchema.parse({ expression: structuredPlanToExpression(value), target: value.target, ranking: value.ranking ? { capability: 'quality.visual', strategy: value.ranking.strategy } : undefined }) };
 
 let sqlite: DatabaseSync;
 let db: SqlDatabase;

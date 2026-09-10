@@ -1,8 +1,6 @@
-import type { QueryPlan } from '@seleva/core';
-
 export interface MatcherInput { text: string; locale?: string; }
 export interface MatcherResult {
-  filters?: QueryPlan['filters'];
+  filters?: Record<string, unknown>;
   consumedSpans: Array<[number, number]>;
   evidence: string[];
   confidence: number;

@@ -8,6 +8,9 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 ## ⚠️ Regras Estritas
 
+- Engine modular (2026-09-10): a busca usa `SearchRequest` com `SearchExpression` AST (predicados por `capabilityId` e composição AND/OR/NOT). `CapabilityRegistry` é único e compartilhado por `AnalysisComposition` e `SearchComposition`; `CapabilityResolver` retorna `available`, `degraded` ou `unavailable`. Analyzers, `QueryProcessor`, `SearchEngine` e `RankingEngine` são contratos independentes. A engine não acessa SQLite, ML Kit, Vision ou ONNX diretamente. O adapter `structuredPlanToExpression` existe somente na borda do parser/UI para converter filtros explícitos em predicados.
+- Engine modular — validação (2026-09-10): catálogo inicial de 15 capabilities com manifests tipados foi registrado em `packages/core/src/capability-catalog.ts`; capabilities sem provider real permanecem indisponíveis, sem mocks. `SearchComposition` ordena predicados por custo, propaga candidate sets e retorna relatório explícito de degradação/indisponibilidade. `AnalysisComposition` processa batches versionáveis e isola falhas.
+
 - Foundation de domínio (2026-09-10): `packages/core` expõe contratos agnósticos de plataforma para `Person`, `Place`, `Label`, `OCRText`, `QualitySignal`, `Selection`, `SearchIntent` e `ActionIntent`, todos com schemas Zod. Esses contratos não implicam que os produtores Android/iOS ou a persistência de seleções já existam. O foco de implementação/validação é Android; iOS só começa após o MVP Android.
 - MVP Fase 1 (2026-09-10): seleções nomeadas agora persistem em `saved_selections`/`saved_selection_members` (migration 3), com query opcional e reabertura no `LibraryScreen`; a mídia nunca é copiada. A seleção ainda é carregada como uma página limitada no UI. O scanner continua foreground e a validação do Development Build Android está bloqueada pelo toolchain NDK.
 - Validação Android da Foundation (2026-09-10): `pnpm.cmd build:android:local` alcançou o projeto nativo, mas falhou em `onnxruntime-react-native:buildCMakeDebug[arm64-v8a]` porque o `clang++.exe` do NDK retornou `Permission denied`. Não declarar Development Build validado até corrigir a permissão/execução do toolchain Windows.
@@ -60,6 +63,8 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - Resultados mostram contagem e seleção da página (até 60 itens), sem apresentar essa contagem como total global. Prévia e confirmação do SO continuam obrigatórias para lixeira.
 
 ## Estado Atual das Features
+
+- [x] Refatoração da engine modular (2026-09-10): `SearchExpression`, `SearchRequest`, `CapabilityRegistry`, `CapabilityResolver`, Analysis/Search Composition, analyzers/query processors/search engines/rankers e catálogo inicial de capabilities implementados. Parser, SelectionContext, SQLite e seleções salvas usam a AST; 92 testes, lint e typecheck passam. Providers reais de semantic visual, pessoas e labels continuam planejados e são reportados como indisponíveis.
 
 - [x] Fase 1, seleções salvas (2026-09-10): persistência SQLite, reabertura e UI multilíngue implementadas; 81 testes passaram. Incremental em background, similaridade aproximada e validação Android em aparelho continuam pendentes.
 

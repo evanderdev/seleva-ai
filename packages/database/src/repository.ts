@@ -7,10 +7,11 @@ import type {
   CleanupReason,
   ScanJob,
   ScanStatus,
-  QueryPlan,
+  SearchRequest,
   Selection,
   SelectionContext,
 } from '@seleva/core';
+import { searchRequestSchema, expressionToStructuredPlan } from '@seleva/core';
 import type { SqlDatabase } from './connection';
 import { buildPhotoQuery } from './query';
 
@@ -95,10 +96,10 @@ export class PhotoRepository {
     const members = await this.db.getAllAsync<{ photo_id: string }>(
       'SELECT photo_id FROM saved_selection_members WHERE selection_id=? ORDER BY photo_id', row.id,
     );
-    let query: QueryPlan | undefined;
+    let query: SearchRequest | undefined;
     let context: SelectionContext | undefined;
     if (row.query_json) {
-      try { query = JSON.parse(row.query_json) as QueryPlan; } catch { query = undefined; }
+      try { query = searchRequestSchema.parse(JSON.parse(row.query_json)); } catch { query = undefined; }
     }
     if (row.context_json) {
       try { context = JSON.parse(row.context_json) as SelectionContext; } catch { context = undefined; }
@@ -117,7 +118,7 @@ export class PhotoRepository {
   async saveSelection(
     name: string,
     assetIds: string[],
-    query?: QueryPlan,
+    query?: SearchRequest,
     context?: SelectionContext,
   ): Promise<Selection> {
     const cleanName = name.trim();
@@ -482,7 +483,7 @@ export class PhotoRepository {
       error: row.error as ScanJob['error'] | undefined,
     };
   }
-  async query(plan: QueryPlan, page: PageRequest): Promise<AssetPage> {
+  async query(plan: SearchRequest, page: PageRequest): Promise<AssetPage> {
     const query = buildPhotoQuery(plan, page);
     const rows = await this.db.getAllAsync<PhotoRow>(
       query.sql,
@@ -521,7 +522,7 @@ export class PhotoRepository {
   }
 
   async getCleanupCandidates(
-    plan: QueryPlan,
+    plan: SearchRequest,
     page: PageRequest,
   ): Promise<CleanupCandidate[]> {
     const result = await this.query(plan, page);
@@ -539,7 +540,9 @@ export class PhotoRepository {
       ...ids,
     );
     const byId = new Map(rows.map((row) => [row.id, row]));
-    const filters = plan.filters;
+    const filters = expressionToStructuredPlan(plan.expression).filters as {
+      screenshot?: boolean; duplicate?: boolean; similar?: boolean; minBlur?: number; minFileSize?: number; before?: number;
+    } | undefined;
     return result.assets.map((asset) => {
       const row = byId.get(asset.id);
       const reasons: CleanupReason[] = [];

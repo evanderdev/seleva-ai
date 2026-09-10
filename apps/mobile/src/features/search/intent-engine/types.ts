@@ -1,7 +1,11 @@
-import { queryPlanSchema, selectionOperationSchema, type ActionIntent, type QueryPlan, type SelectionContext } from '@seleva/core';
+import { selectionOperationSchema, type ActionIntent, type SearchRequest, type SelectionContext, type SearchExpression } from '@seleva/core';
 import { z } from 'zod';
 
 export const promptSchema = z.string().trim().min(1).max(500);
+const structuredQuerySchema = z.strictObject({
+  target: z.strictObject({ minSpaceToRecover: z.number().int().positive().optional(), maxResults: z.number().int().positive().optional() }).optional(),
+  filters: z.record(z.string(), z.unknown()).optional(), exclusions: z.record(z.string(), z.unknown()).optional(), ranking: z.strictObject({ strategy: z.string() }).optional(),
+});
 export const intentSchema = z.strictObject({
   action: z.enum([
     'find',
@@ -16,7 +20,7 @@ export const intentSchema = z.strictObject({
     'unfavorite',
     'share',
   ]),
-  query: queryPlanSchema,
+  query: structuredQuerySchema,
   concepts: z
     .array(
       z.enum([
@@ -114,7 +118,8 @@ export type PlanNotice =
   | 'ambiguousOperation';
 export interface IntentExecutionPlan {
   status: 'ready' | 'clarification' | 'unsupported';
-  query?: QueryPlan;
+  query?: SearchRequest;
+  expression?: SearchExpression;
   action?: ActionIntent;
   notices: PlanNotice[];
   requiresReview: true;
@@ -126,6 +131,8 @@ export interface IntentInterpretation {
   normalized: NormalizedIntentInput;
   interpretation: { intent: SelevaIntent; confidence: number };
   plan: IntentExecutionPlan;
+  /** Canonical AST consumed by Search Composition; query is retained only for the current UI boundary. */
+  expression: SearchExpression;
   selectionContext?: SelectionContext;
   /** Returned only when explicitly enabled; never logged or persisted. */
   debug?: {

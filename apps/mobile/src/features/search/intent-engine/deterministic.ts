@@ -1,4 +1,3 @@
-import type { QueryPlan } from '@seleva/core';
 import { dateParser } from './dates';
 import { fold } from './normalizer';
 import {
@@ -8,7 +7,7 @@ import {
 } from './types';
 import { builtinMatchers, runMatcherRegistry } from './matchers';
 
-type Filter = NonNullable<QueryPlan['filters']>;
+interface Filter { before?: number; after?: number; mediaTypes?: Array<'photo' | 'video'>; screenshot?: boolean; favorite?: boolean; duplicate?: boolean; similar?: boolean; hasFaces?: boolean; labels?: string[]; ocrTerms?: string[]; maxQuality?: number; minBlur?: number; minFileSize?: number; people?: string[]; places?: string[]; sceneLabels?: string[]; source?: string; }
 const aliases: Array<[RegExp, Partial<Filter>]> = [
   [
     /\b(screenshots?|prints?|capturas?(?: de (?:tela|pantalla))?|screen captures?)\b/g,
@@ -111,7 +110,7 @@ export const deterministicProvider: DeterministicIntentProvider = {
     const freeSpace = Boolean(text.match(freePattern));
     cleanupCandidate ||= freeSpace;
     text = text.replace(freePattern, '');
-    let target: QueryPlan['target'];
+    let target: { minSpaceToRecover?: number; maxResults?: number } | undefined;
     text = text.replace(
       /\b(\d+(?:[.,]\d+)?)\s*(gb|mb|gib|mib)\b/g,
       (_, amount: string, unit: string) => {
