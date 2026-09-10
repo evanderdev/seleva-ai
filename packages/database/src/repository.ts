@@ -48,6 +48,21 @@ function pendingForStage(fastOnly = false): string {
 }
 const pendingAnalysis = pendingForStage();
 
+// SQLite has no built-in bit_count. The Android visual hash is a 64-bit value
+// represented by 16 hexadecimal nibbles, so compare candidate pairs with a
+// bounded Hamming distance while keeping the expensive work inside SQLite.
+function hammingExpression(left: string, right: string): string {
+  const nibble = (source: string, position: number) =>
+    `(CASE substr(${source},${position},1) WHEN '0' THEN 0 WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3' THEN 3 WHEN '4' THEN 4 WHEN '5' THEN 5 WHEN '6' THEN 6 WHEN '7' THEN 7 WHEN '8' THEN 8 WHEN '9' THEN 9 WHEN 'a' THEN 10 WHEN 'b' THEN 11 WHEN 'c' THEN 12 WHEN 'd' THEN 13 WHEN 'e' THEN 14 WHEN 'f' THEN 15 ELSE 0 END)`;
+  const distances: string[] = [];
+  for (let position = 1; position <= 16; position += 1) {
+    // SQLite does not expose XOR; derive it from OR/AND arithmetic.
+    const xor = `(${nibble(left, position)} + ${nibble(right, position)} - 2 * (${nibble(left, position)} & ${nibble(right, position)}))`;
+    distances.push(`(((${xor} & 1) != 0) + ((${xor} & 2) != 0) + ((${xor} & 4) != 0) + ((${xor} & 8) != 0))`);
+  }
+  return `(${distances.join(' + ')})`;
+}
+
 export class PhotoRepository {
   constructor(private readonly db: SqlDatabase) {}
 
@@ -282,6 +297,29 @@ export class PhotoRepository {
           JOIN photo_clusters c ON c.id = 'cluster-${kind}:' || ${key}
           WHERE a.analyzed_at >= COALESCE(p.modified_at,0)`);
       }
+      const distance = hammingExpression('a.perceptual_hash', 'b.perceptual_hash');
+      // The first four nibbles form a coarse bucket, avoiding an unbounded
+      // all-against-all comparison on large libraries. Pairs are represented
+      // independently; the query layer deduplicates photo IDs.
+      await tx.runAsync(`INSERT INTO photo_clusters(id,kind,representative_id)
+        SELECT 'cluster-similar:' || a.photo_id || ':' || b.photo_id, 'similar', a.photo_id
+        FROM photo_analysis a JOIN photo_analysis b ON a.photo_id < b.photo_id
+        JOIN photos pa ON pa.id=a.photo_id JOIN photos pb ON pb.id=b.photo_id
+        WHERE a.perceptual_hash IS NOT NULL AND b.perceptual_hash IS NOT NULL
+          AND a.perceptual_hash != '' AND b.perceptual_hash != ''
+          AND substr(a.perceptual_hash,1,4) = substr(b.perceptual_hash,1,4)
+          AND a.model_version IN ('android-fast-2','android-heuristic-2')
+          AND b.model_version IN ('android-fast-2','android-heuristic-2')
+          AND a.analyzed_at >= COALESCE(pa.modified_at,0)
+          AND b.analyzed_at >= COALESCE(pb.modified_at,0)
+          AND ${distance} <= 8`);
+      await tx.runAsync(`INSERT INTO photo_cluster_members(cluster_id,photo_id)
+        SELECT id, representative_id FROM photo_clusters WHERE kind='similar'
+        UNION ALL
+        SELECT c.id, b.photo_id FROM photo_clusters c
+        JOIN photo_analysis a ON c.representative_id=a.photo_id
+        JOIN photo_analysis b ON c.id='cluster-similar:' || a.photo_id || ':' || b.photo_id
+        WHERE c.kind='similar'`);
     });
   }
 

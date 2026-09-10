@@ -399,6 +399,31 @@ it('invalidates old Android hashes and never groups them with the new algorithm'
   expect((await repository.getInsights()).similarPhotos).toBe(0);
 });
 
+it('groups Android visual hashes within a bounded Hamming distance', async () => {
+  await photo('android:a');
+  await photo('android:b');
+  await repository.upsertAnalyses([
+    {
+      photoId: 'android:a', analysisVersion: 1, analyzedAt: Date.now(),
+      modelVersion: 'android-fast-2', perceptualHash: '0123456789abcdef',
+    },
+    {
+      photoId: 'android:b', analysisVersion: 1, analyzedAt: Date.now(),
+      modelVersion: 'android-fast-2', perceptualHash: '0123456789abcdee',
+    },
+  ]);
+  await repository.rebuildClusters();
+  const result = await repository.query(queryPlanSchema.parse({
+    filters: { similar: true }, exclusions: { favorites: false },
+  }), { limit: 10 });
+  expect(result.assets.map((asset) => asset.id).sort()).toEqual([
+    'android:a', 'android:b',
+  ]);
+  expect((await db.getAllAsync<{ kind: string }>(
+    "SELECT kind FROM photo_clusters WHERE kind='similar'",
+  ))).toEqual([{ kind: 'similar' }]);
+});
+
 it('reconciles assets removed from the device after a completed scan', async () => {
   await photo('old');
   await repository.upsertAssets(

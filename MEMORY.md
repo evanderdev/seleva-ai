@@ -162,3 +162,10 @@ O APK anterior falhava antes do JavaScript porque `expo.modules.ExpoModulesPacka
 - O fluxo de selecoes salvas usa SQLite migration 3 (`saved_selections` e `saved_selection_members`) e permite salvar/reabrir a selecao atual.
 - Nao houve crash fatal na observacao do aparelho. O Android exibiu alerta de alinhamento ELF para paginas de 16 KB em bibliotecas nativas; validar dependencias antes do release.
 - Incremental/background automatico, similaridade aproximada e validacao completa do trash no hardware continuam pendentes da Fase 1.
+
+## Execucao dos gaps da Fase 1 (10/09/2026)
+
+- Ao retomar o app do background, `LibraryBootstrap` força uma reconciliação de metadata; análises permanecem incrementais pelo cache de asset/versão. WorkManager nativo completo continua fora do caminho JS atual, pois a persistência e o protocolo de ACK dependem da sessão React ativa.
+- `PhotoRepository.rebuildClusters` agora cria grupos `similar` para hashes Android dentro de distância de Hamming <= 8 em buckets de quatro nibbles, sem carregar a biblioteca inteira no JavaScript. O teste SQLite cobre o agrupamento aproximado.
+- O plugin `withAndroid16kPackaging` configura `expo.useLegacyPackaging=true` durante o prebuild para empacotar bibliotecas nativas de forma compatível. APK recompilado, instalado e iniciado no Samsung SM-S918B sem alerta 16 KB nesta rodada.
+- Typecheck, lint e 83 testes passaram. Ação de trash foi mantida exclusivamente reversível via confirmação do sistema; não foi automatizada para evitar alterar fotos reais durante a validação.

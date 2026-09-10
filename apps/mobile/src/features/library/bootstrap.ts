@@ -270,10 +270,20 @@ export function createLibraryBootstrap(deps: Dependencies) {
       return start();
     },
     setActive(value: boolean) {
+      const resumed = !active && value;
       active = value;
       if (!value && state.job?.status === 'running')
         void deps.stop(state.job.id);
-      if (value) void start();
+      if (value) {
+        // A library can change while the app is backgrounded. Reconcile metadata
+        // on every resume; analysis remains incremental through the native cache.
+        if (resumed) {
+          forceRefresh = true;
+          metadataDone = false;
+          completed = false;
+        }
+        void start();
+      }
     },
   };
 }

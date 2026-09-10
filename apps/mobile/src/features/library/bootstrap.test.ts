@@ -105,6 +105,16 @@ it('does not start work while backgrounded', async () => {
   await controller.start();
   expect(scan).not.toHaveBeenCalled();
 });
+it('reconciles the library after returning to the foreground', async () => {
+  const { controller, scan } = setup('authorized');
+  await controller.start();
+  expect(scan).toHaveBeenCalledTimes(2);
+  controller.setActive(false);
+  controller.setActive(true);
+  await controller.start();
+  expect(scan).toHaveBeenCalledTimes(3);
+  expect(scan.mock.calls[2]?.[0].metadataOnly).toBe(true);
+});
 it('reports failure without automatically retrying in a loop', async () => {
   const { controller, scan } = setup('authorized');
   scan.mockRejectedValue(new Error('native'));

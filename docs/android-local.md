@@ -22,6 +22,10 @@ fica em `.g`. O build mantém o projeto e o `node_modules` no mesmo caminho orig
 pois o codegen do React Native rejeita raízes diferentes (por exemplo, projeto em `S:`
 e dependências em `C:`).
 
+O plugin `withAndroid16kPackaging` também é aplicado no prebuild. Ele define
+`expo.useLegacyPackaging=true` para empacotar bibliotecas nativas comprimidas, uma
+configuração compatível com dispositivos que usam páginas de memória de 16 KB.
+
 Neste computador, enquanto o Node global não for atualizado:
 
 ```sh

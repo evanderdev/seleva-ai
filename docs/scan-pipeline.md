@@ -8,7 +8,9 @@ The previous implementation sampled only the first 64 pixels of a 32x32 image.
 iOS versions are unchanged. A first run with this build recalculates Android analyses.
 Exact and visual SQL groups are built independently, so completing SHA-256 does
 not remove visual matches. Visual groups separate algorithm generations; overlapping
-groups still count each photo once. Approximate Hamming grouping remains future work.
+groups still count each photo once. Android also creates bounded approximate groups
+using Hamming distance <= 8 inside four-nibble hash buckets; this avoids loading the
+library into JavaScript or comparing every pair without a coarse index.
 
 Android trash now opens `MediaStore.createTrashRequest(..., true)` and waits for
 the system result before updating SQLite. Cancellation preserves selection/index;
@@ -115,15 +117,16 @@ with 5k and 30k assets and low-memory devices before tuning concurrency.
   complete row. This preserves existing full-analysis semantics, with some repeated work.
 - Enumeration is still repeated across passes. Metadata discovery completes before
   visual analysis begins, although committed metadata already unlocks the app.
-- Clusters still use global SQL grouping by equal compact hashes. No all-pairs
-  comparison exists; approximate Hamming-distance grouping is not implemented.
-  The existing visual hash/quality heuristics need accuracy calibration; they must
-  never be treated as deletion confidence or a best-shot decision.
+- Android now adds bounded Hamming-distance groups in SQLite. The bucket is a
+  performance guard and can miss visually close hashes that fall in another bucket;
+  accuracy still needs calibration and must never be treated as deletion confidence
+  or a best-shot decision.
 - Global grouping and insight aggregate queries may still dominate very large
   indexes. Incremental cluster maintenance is a future optimization after profiling.
-- Background execution, automatic library-change reconciliation and runtime
-  thermal/memory-aware concurrency remain future work. Foreground lifecycle pause
-  and the existing six-hour cache/manual refresh behavior remain in place.
+- Automatic foreground reconciliation is implemented: returning from background
+  invalidates metadata completion and re-enumerates the library while reusing valid
+  analysis rows. WorkManager execution independent of the React session, plus
+  runtime thermal/memory-aware scheduling, remain future work.
 - Per-category completion beyond fast/full counts, detailed iOS profiling and
   PhotoKit preheating need device validation. iCloud-only resources remain local-only;
   incomplete deep content availability may require manual refresh/retry.
