@@ -46,9 +46,9 @@ export class SqlCandidateIndex implements CandidateIndex {
     if (predicate.capability === 'metadata.core' && field === 'mediaTypes' && Array.isArray(value) && value.every(item => item === 'photo' || item === 'video')) return append(base, `p.media_type IN (${value.map(() => '?').join(',')})`, value);
     if (predicate.capability === 'metadata.core' && (field === 'favorite' || field === 'favorites') && typeof value === 'boolean') return append(base, 'p.favorite = ?', [Number(value)]);
     if (predicate.capability === 'metadata.core' && field === 'minFileSize' && typeof value === 'number') return append(base, 'p.file_size >= ?', [value]);
-    if (predicate.capability === 'content.screenshot' && typeof value === 'boolean') return append(base, 'COALESCE(a.is_screenshot, 0) = ?', [Number(value)]);
-    if (predicate.capability === 'quality.visual' && field === 'maxQuality' && typeof value === 'number') return append(base, 'a.quality_score <= ?', [value]);
-    if (predicate.capability === 'quality.visual' && field === 'minBlur' && typeof value === 'number') return append(base, 'a.blur_score >= ?', [value]);
+    if (predicate.capability === 'content.screenshot' && typeof value === 'boolean') return append(base, 'COALESCE(c.is_screenshot, a.is_screenshot, 0) = ?', [Number(value)]);
+    if (predicate.capability === 'quality.visual' && field === 'maxQuality' && typeof value === 'number') return append(base, 'COALESCE(q.quality_score, a.quality_score) <= ?', [value]);
+    if (predicate.capability === 'quality.visual' && field === 'minBlur' && typeof value === 'number') return append(base, 'COALESCE(q.blur_score, a.blur_score) >= ?', [value]);
     if (predicate.capability === 'quality.visual' && field === 'hasFaces' && typeof value === 'boolean') return append(base, value ? 'a.face_count > 0' : 'a.face_count = 0', []);
     if (predicate.capability === 'text.ocr' && field === 'ocrTerms' && Array.isArray(value) && value.every(item => typeof item === 'string')) {
       const match = value.map(item => `"${item.replaceAll('"', '""')}"`).join(' AND ');
@@ -63,7 +63,7 @@ export class SqlCandidateIndex implements CandidateIndex {
   }
   rank(candidates: CandidateSet, strategy: string): SqlSet {
     const set = candidates as SqlSet;
-    const orderBy = strategy === 'largest' ? 'COALESCE(p.file_size, -1) DESC' : strategy === 'worst-quality' ? 'COALESCE(a.quality_score, 2) ASC' : undefined;
+    const orderBy = strategy === 'largest' ? 'COALESCE(p.file_size, -1) DESC' : strategy === 'worst-quality' ? 'COALESCE(q.quality_score, a.quality_score, 2) ASC' : undefined;
     if (!orderBy) throw new Error(`UNSUPPORTED_RANKING:${strategy}`);
     return { ...set, key: `${set.key}|rank:${strategy}`, orderBy };
   }
@@ -80,7 +80,11 @@ export class SqlCandidateIndex implements CandidateIndex {
       params.push(cursor.value, cursor.value, cursor.id);
     }
     const remaining = maxResults === undefined ? page.limit : Math.max(0, maxResults - consumed); const limit = Math.min(page.limit, remaining); const fetchLimit = maxResults === undefined ? limit + 1 : Math.min(limit + 1, remaining);
-    const rows = await this.db.getAllAsync<PhotoRow>(`SELECT p.*, ${sortExpression} AS sort_value FROM photos p LEFT JOIN photo_analysis a ON a.photo_id = p.id WHERE ${where.join(' AND ')} ORDER BY ${orderBy}, p.id ${descending ? 'DESC' : 'ASC'} LIMIT ?`, ...params, fetchLimit);
+    const rows = await this.db.getAllAsync<PhotoRow>(`SELECT p.*, ${sortExpression} AS sort_value FROM photos p
+      LEFT JOIN photo_analysis a ON a.photo_id = p.id
+      LEFT JOIN photo_quality_signals q ON q.photo_id = p.id
+      LEFT JOIN photo_content_signals c ON c.photo_id = p.id
+      WHERE ${where.join(' AND ')} ORDER BY ${orderBy}, p.id ${descending ? 'DESC' : 'ASC'} LIMIT ?`, ...params, fetchLimit);
     const visible = rows.slice(0, limit);
     return { assets: visible.map(row => ({ id: row.id, mediaType: row.media_type, createdAt: row.created_at, modifiedAt: row.modified_at ?? undefined, width: row.width, height: row.height, duration: row.duration ?? undefined, fileSize: row.file_size ?? undefined, isFavorite: row.favorite === 1, latitude: row.latitude ?? undefined, longitude: row.longitude ?? undefined })), nextCursor: rows.length > limit && visible.at(-1) ? JSON.stringify({ query: fingerprint, value: visible.at(-1)!.sort_value, id: visible.at(-1)!.id, consumed: consumed + visible.length }) : undefined };
   }

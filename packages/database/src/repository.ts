@@ -206,11 +206,14 @@ export class PhotoRepository {
       COALESCE(SUM(p.file_size IS NULL),0) AS unknownSizes,
       COALESCE(SUM(${pendingAnalysis}),0) AS pending,
       COALESCE(SUM(${pendingForStage(true)}),0) AS fastPending,
-      COALESCE(SUM(a.is_screenshot = 1),0) AS screenshots,
-      COALESCE(SUM(a.blur_score >= 0.55),0) AS blurry,
+      COALESCE(SUM(COALESCE(c.is_screenshot, a.is_screenshot) = 1),0) AS screenshots,
+      COALESCE(SUM(COALESCE(q.blur_score, a.blur_score) >= 0.55),0) AS blurry,
       COALESCE(SUM(p.media_type = 'video' AND p.file_size >= 524288000),0) AS largeVideos,
       COALESCE(SUM(CASE WHEN p.media_type = 'video' AND p.file_size >= 524288000 THEN p.file_size ELSE 0 END),0) AS largeVideoBytes
-      FROM photos p LEFT JOIN photo_analysis a ON a.photo_id = p.id`);
+      FROM photos p
+      LEFT JOIN photo_analysis a ON a.photo_id = p.id
+      LEFT JOIN photo_quality_signals q ON q.photo_id = p.id
+      LEFT JOIN photo_content_signals c ON c.photo_id = p.id`);
     // One keeper per exact-content group, with every favorite protected. No visual
     // similarity or blur heuristic contributes to the savings estimate.
     const [duplicates] = await this.db.getAllAsync<{
@@ -219,10 +222,11 @@ export class PhotoRepository {
     }>(`
       WITH ranked AS (
         SELECT p.file_size, p.favorite,
-          ROW_NUMBER() OVER (PARTITION BY a.content_hash ORDER BY p.favorite DESC, p.id) AS position
+          ROW_NUMBER() OVER (PARTITION BY COALESCE(h.content_hash, a.content_hash) ORDER BY p.favorite DESC, p.id) AS position
         FROM photos p JOIN photo_analysis a ON a.photo_id = p.id
-        WHERE a.content_hash IS NOT NULL AND a.content_hash != ''
-          AND a.analyzed_at >= COALESCE(p.modified_at,0)
+        LEFT JOIN photo_hashes h ON h.photo_id = p.id
+        WHERE COALESCE(h.content_hash, a.content_hash) IS NOT NULL AND COALESCE(h.content_hash, a.content_hash) != ''
+          AND COALESCE(h.analyzed_at, a.analyzed_at) >= COALESCE(p.modified_at,0)
       ) SELECT COALESCE(SUM(file_size),0) AS duplicateBytes, COUNT(*) AS duplicateCopies
         FROM ranked WHERE position > 1 AND favorite = 0`);
     const [similar] = await this.db.getAllAsync<{ similarPhotos: number }>(`
@@ -464,22 +468,28 @@ export class PhotoRepository {
         ['exact', 'content_hash'],
         ['visual', 'perceptual_hash'],
       ] as const) {
+        const signal = `COALESCE(h.${column}, a.${column})`;
         const key =
           kind === 'visual'
-            ? `CASE WHEN a.model_version IN ('android-fast-2','android-heuristic-2') THEN 'android-v2:' ELSE 'legacy:' END || a.${column}`
-            : `a.${column}`;
+            ? `CASE WHEN COALESCE(h.model_version, a.model_version) IN ('android-fast-2','android-heuristic-2') THEN 'android-v2:' ELSE 'legacy:' END || ${signal}`
+            : signal;
         await tx.runAsync(`INSERT INTO photo_clusters(id,kind,representative_id)
           SELECT 'cluster-${kind}:' || ${key}, '${kind}', MIN(a.photo_id)
           FROM photo_analysis a JOIN photos p ON p.id=a.photo_id
-          WHERE a.${column} IS NOT NULL AND a.${column} != ''
-            AND a.analyzed_at >= COALESCE(p.modified_at,0)
+          LEFT JOIN photo_hashes h ON h.photo_id=a.photo_id
+          WHERE ${signal} IS NOT NULL AND ${signal} != ''
+            AND COALESCE(h.analyzed_at, a.analyzed_at) >= COALESCE(p.modified_at,0)
           GROUP BY ${key} HAVING COUNT(*) > 1`);
         await tx.runAsync(`INSERT INTO photo_cluster_members(cluster_id,photo_id)
           SELECT c.id,a.photo_id FROM photo_analysis a JOIN photos p ON p.id=a.photo_id
+          LEFT JOIN photo_hashes h ON h.photo_id=a.photo_id
           JOIN photo_clusters c ON c.id = 'cluster-${kind}:' || ${key}
-          WHERE a.analyzed_at >= COALESCE(p.modified_at,0)`);
+          WHERE COALESCE(h.analyzed_at, a.analyzed_at) >= COALESCE(p.modified_at,0)`);
       }
-      const distance = hammingExpression('a.perceptual_hash', 'b.perceptual_hash');
+      const distance = hammingExpression(
+        'COALESCE(ha.perceptual_hash, a.perceptual_hash)',
+        'COALESCE(hb.perceptual_hash, b.perceptual_hash)',
+      );
       // The first four nibbles form a coarse bucket, avoiding an unbounded
       // all-against-all comparison on large libraries. Pairs are represented
       // independently; the query layer deduplicates photo IDs.
@@ -487,13 +497,17 @@ export class PhotoRepository {
         SELECT 'cluster-similar:' || a.photo_id || ':' || b.photo_id, 'similar', a.photo_id
         FROM photo_analysis a JOIN photo_analysis b ON a.photo_id < b.photo_id
         JOIN photos pa ON pa.id=a.photo_id JOIN photos pb ON pb.id=b.photo_id
-        WHERE a.perceptual_hash IS NOT NULL AND b.perceptual_hash IS NOT NULL
-          AND a.perceptual_hash != '' AND b.perceptual_hash != ''
-          AND substr(a.perceptual_hash,1,4) = substr(b.perceptual_hash,1,4)
-          AND a.model_version IN ('android-fast-2','android-heuristic-2')
-          AND b.model_version IN ('android-fast-2','android-heuristic-2')
-          AND a.analyzed_at >= COALESCE(pa.modified_at,0)
-          AND b.analyzed_at >= COALESCE(pb.modified_at,0)
+        LEFT JOIN photo_hashes ha ON ha.photo_id=a.photo_id
+        LEFT JOIN photo_hashes hb ON hb.photo_id=b.photo_id
+        WHERE COALESCE(ha.perceptual_hash, a.perceptual_hash) IS NOT NULL
+          AND COALESCE(hb.perceptual_hash, b.perceptual_hash) IS NOT NULL
+          AND COALESCE(ha.perceptual_hash, a.perceptual_hash) != ''
+          AND COALESCE(hb.perceptual_hash, b.perceptual_hash) != ''
+          AND substr(COALESCE(ha.perceptual_hash, a.perceptual_hash),1,4) = substr(COALESCE(hb.perceptual_hash, b.perceptual_hash),1,4)
+          AND COALESCE(ha.model_version, a.model_version) IN ('android-fast-2','android-heuristic-2')
+          AND COALESCE(hb.model_version, b.model_version) IN ('android-fast-2','android-heuristic-2')
+          AND COALESCE(ha.analyzed_at, a.analyzed_at) >= COALESCE(pa.modified_at,0)
+          AND COALESCE(hb.analyzed_at, b.analyzed_at) >= COALESCE(pb.modified_at,0)
           AND ${distance} <= 8`);
       await tx.runAsync(`INSERT INTO photo_cluster_members(cluster_id,photo_id)
         SELECT id, representative_id FROM photo_clusters WHERE kind='similar'
@@ -634,7 +648,14 @@ export class PhotoRepository {
       blur_score: number | null;
       created_at: number;
     }>(
-      `SELECT p.id, p.file_size, p.created_at, a.is_screenshot, a.blur_score FROM photos p LEFT JOIN photo_analysis a ON a.photo_id = p.id WHERE p.id IN (${placeholders})`,
+      `SELECT p.id, p.file_size, p.created_at,
+        COALESCE(c.is_screenshot, a.is_screenshot) AS is_screenshot,
+        COALESCE(q.blur_score, a.blur_score) AS blur_score
+       FROM photos p
+       LEFT JOIN photo_analysis a ON a.photo_id = p.id
+       LEFT JOIN photo_content_signals c ON c.photo_id = p.id
+       LEFT JOIN photo_quality_signals q ON q.photo_id = p.id
+       WHERE p.id IN (${placeholders})`,
       ...ids,
     );
     const byId = new Map(rows.map((row) => [row.id, row]));

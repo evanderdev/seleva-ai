@@ -125,7 +125,7 @@ Saída: análise incremental usa a mesma registry e não duplica lógica entre s
 - `CapabilityRegistry` agora aceita providers de plataforma anexados a manifests já registrados.
 - O adapter Android registra analyzers para os estágios fast/deep e usa `AnalysisComposition` para cache, disponibilidade e lotes de até 20 assets.
 - A seleção nativa é despachada uma vez por lote; o `PhotoScanRunner` continua responsável por thumbnails, OCR, hashes, pausa, retomada e ACK após o commit SQLite.
-- A persistência mantém o payload agregado para as consultas existentes, grava `photo_analysis_capabilities` com estado, versão, modelo e erro por capability e materializa sinais em `photo_quality_signals`, `photo_content_signals`, `photo_hashes` e `photo_ocr_text`. As consultas SQL ainda usam a projeção agregada; a troca dos readers para as tabelas específicas fica para o próximo incremento.
+- A persistência mantém o payload agregado para compatibilidade, grava `photo_analysis_capabilities` com estado, versão, modelo e erro por capability e materializa sinais em `photo_quality_signals`, `photo_content_signals`, `photo_hashes` e `photo_ocr_text`. Os readers SQL usam as tabelas específicas com fallback para `photo_analysis`; o FTS legado continua como índice de compatibilidade.
 
 ## Etapa 7 — remover a arquitetura antiga
 
