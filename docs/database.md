@@ -27,14 +27,15 @@ Produção usa expo-sqlite. Testes usam SQLite real em memória via node:sqlite 
 da mesma interface SqlDatabase. O banco é aberto como `seleva.db`, com WAL, foreign keys
 e busy timeout. Não contém cópias dos arquivos da galeria.
 
-Migration 1 cria photos, photo_analysis, photo_labels, photo_clusters,
-photo_cluster_members, scan_jobs, cleanup_history, user_preferences e photo_ocr FTS5.
+Migration 1 cria photos, os índices iniciais, photo_labels, photo_clusters,
+photo_cluster_members, scan_jobs, cleanup_history e user_preferences.
 Migration 2 adiciona o hash de conteúdo usado para clusters de duplicatas exatas.
 Migration 5 registra o estado e o erro de cada capability por asset. Migration 6 materializa
-os sinais de qualidade, conteúdo, hashes e OCR em tabelas próprias e faz backfill da projeção
-agregada existente. `photo_analysis` permanece como projeção compatível durante a migração dos
-readers; todos os writes acontecem na mesma transação do lote.
-Versões usam PRAGMA user_version; cada atualização ocorre dentro de transação exclusiva.
+os sinais de qualidade, conteúdo, hashes e OCR em tabelas próprias. Migration 7 remove as
+tabelas agregadas e instala `photo_ocr_index`, alimentado exclusivamente por `photo_ocr_text`.
+As tabelas específicas são a única fonte de leitura e escrita; todos os writes acontecem na
+mesma transação do lote.
+Versão atual: 7. Versões usam PRAGMA user_version; cada atualização ocorre dentro de transação exclusiva.
 Banco de versão futura é rejeitado. Triggers mantêm OCR sincronizado em insert/update/delete,
 inclusive deleção em cascata de assets.
 

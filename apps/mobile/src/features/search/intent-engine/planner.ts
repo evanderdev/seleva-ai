@@ -1,5 +1,5 @@
-import { searchRequestSchema, structuredPlanToExpression } from '@seleva/core';
 import { intentSchema, type IntentPlanner, type PlanNotice } from './types';
+import { queryToRequest } from './query';
 
 export const planner: IntentPlanner = {
   async createPlan(candidate) {
@@ -8,8 +8,7 @@ export const planner: IntentPlanner = {
     if (intent.bestShot) notices.push('bestShotUnavailable');
     if (['organize', 'compare', 'keep'].includes(intent.action))
       notices.push('actionUnavailable');
-    const expression = structuredPlanToExpression(intent.query);
-    const query = searchRequestSchema.parse({ expression, target: intent.query.target, ranking: intent.query.ranking ? { capability: 'quality.visual', strategy: intent.query.ranking.strategy } : undefined });
+    const query = queryToRequest(intent.query);
     if (intent.query.filters?.people || intent.query.filters?.places || intent.query.filters?.sceneLabels || intent.query.filters?.source) notices.push('filterUnavailable');
     // Classification labels are not populated with these semantic categories yet.
     if (intent.concepts.length || notices.length) {

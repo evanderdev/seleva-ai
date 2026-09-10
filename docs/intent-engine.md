@@ -1,7 +1,7 @@
 # Seleva Intent Engine
 
 The search prompt is interpreted locally through a validated, asynchronous boundary. Natural
-language ends at `SelevaIntent`; consumers receive an existing `QueryPlan` and never call gallery
+language ends at `SelevaIntent`; consumers receive a validated `SearchRequest` and never call gallery
 or trash APIs from the interpreter.
 
 ## Pipeline
@@ -12,7 +12,7 @@ or trash APIs from the interpreter.
    model and compare the original text with precomputed concept vectors.
 4. Merge only schema-valid semantic suggestions. Semantic output cannot create a destructive
    action.
-5. Validate `SelevaIntent` and adapt supported fields to the existing `QueryPlan`.
+5. Validate `SelevaIntent` and adapt supported fields to a `SearchExpression` AST.
 
 Unsupported categories and operations return `unsupported`. Broad cleanup/free-space requests
 without an executable filter return `clarification`. The UI explains these states instead of

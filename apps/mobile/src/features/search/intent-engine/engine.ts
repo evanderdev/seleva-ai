@@ -1,7 +1,8 @@
 import { deterministicProvider } from './deterministic';
-import { createSelectionContext, reduceSelectionContext, searchRequestSchema, structuredPlanToExpression } from '@seleva/core';
+import { createSelectionContext, reduceSelectionContext } from '@seleva/core';
 import { normalizer } from './normalizer';
 import { planner } from './planner';
+import { queryToRequest } from './query';
 import {
   intentSchema,
   promptSchema,
@@ -111,7 +112,7 @@ export function createIntentEngine(
       measure('semanticDuration');
       if (intent.cleanupCandidate || intent.destructive) intent.query.exclusions = { ...(intent.query.exclusions ?? {}), favorites: true };
       const operation = intent.operation ?? (intent.action === 'refine' ? 'restrict' : 'new');
-      const request = searchRequestSchema.parse({ expression: structuredPlanToExpression(intent.query), target: intent.query.target, ranking: intent.query.ranking ? { capability: 'quality.visual', strategy: intent.query.ranking.strategy } : undefined });
+      const request = queryToRequest(intent.query);
       const selectionContext = operation === 'new' && !context.selectionContext
         ? createSelectionContext(request)
         : reduceSelectionContext(context.selectionContext, operation, request);

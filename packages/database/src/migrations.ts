@@ -174,6 +174,34 @@ FROM photo_analysis
 WHERE ocr_text IS NOT NULL;
 `,
   },
+  {
+    version: 7,
+    sql: `
+DROP TRIGGER IF EXISTS analysis_insert;
+DROP TRIGGER IF EXISTS analysis_update;
+DROP TRIGGER IF EXISTS analysis_delete;
+DROP TABLE IF EXISTS photo_ocr;
+DROP TABLE IF EXISTS photo_analysis;
+CREATE VIRTUAL TABLE photo_ocr_index USING fts5(
+  photo_id UNINDEXED,
+  ocr_text,
+  tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER photo_ocr_text_insert AFTER INSERT ON photo_ocr_text BEGIN
+  INSERT INTO photo_ocr_index(photo_id, ocr_text) VALUES(new.photo_id, new.ocr_text);
+END;
+CREATE TRIGGER photo_ocr_text_update AFTER UPDATE OF ocr_text ON photo_ocr_text BEGIN
+  DELETE FROM photo_ocr_index WHERE photo_id = old.photo_id;
+  INSERT INTO photo_ocr_index(photo_id, ocr_text) VALUES(new.photo_id, new.ocr_text);
+END;
+CREATE TRIGGER photo_ocr_text_delete AFTER DELETE ON photo_ocr_text BEGIN
+  DELETE FROM photo_ocr_index WHERE photo_id = old.photo_id;
+END;
+ALTER TABLE photo_quality_signals ADD COLUMN face_count INTEGER CHECK(face_count >= 0);
+INSERT INTO photo_ocr_index(photo_id, ocr_text)
+  SELECT photo_id, ocr_text FROM photo_ocr_text;
+`,
+  },
 ] as const;
 
 export async function migrate(db: SqlDatabase): Promise<void> {

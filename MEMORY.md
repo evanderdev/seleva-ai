@@ -3,6 +3,7 @@
 ## Arquitetura vigente
 
 - Analysis Composition nativa (2026-09-10): o scanner Android resolve `content.screenshot`, `quality.visual`, `similarity.perceptual`, `duplicate.exact` e `text.ocr` por analyzers registrados antes de selecionar IDs pendentes. O adapter JS faz uma única seleção por lote e mantém o ACK somente depois do commit SQLite; thumbnails, OCR e hashes continuam no `PhotoScanRunner`/`PhotoAnalyzer` Kotlin. Fast/deep preservam cache e versões `android-fast-2`/`android-heuristic-2`.
+- Fonte única de sinais (2026-09-10): a migration 7 remove `photo_analysis` e o FTS `photo_ocr` após materializar o schema final. O writer e os readers usam somente `photo_analysis_capabilities`, `photo_quality_signals`, `photo_content_signals`, `photo_hashes` e `photo_ocr_text`; `photo_ocr_index` é mantido por triggers do texto OCR. Não reintroduzir fallback agregado.
 
 O prompt posterior em `docs/specification.md` substitui as escolhas RN CLI/TurboModule manual
 do AGENTS.md original. Usar Expo SDK 57, React Native 0.86.3, React 19.2.3, Expo Router,
@@ -13,6 +14,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - Engine modular (2026-09-10): a busca usa `SearchRequest` com `SearchExpression` AST (predicados por `capabilityId` e composição AND/OR/NOT). `CapabilityRegistry` é único e compartilhado por `AnalysisComposition` e `SearchComposition`; `CapabilityResolver` retorna `available`, `degraded` ou `unavailable`. Analyzers, `QueryProcessor`, `SearchEngine` e `RankingEngine` são contratos independentes. A engine não acessa SQLite, ML Kit, Vision ou ONNX diretamente. O adapter `structuredPlanToExpression` existe somente na borda do parser/UI para converter filtros explícitos em predicados.
 - Engine modular — validação (2026-09-10): catálogo inicial de 15 capabilities com manifests tipados foi registrado em `packages/core/src/capability-catalog.ts`; capabilities sem provider real permanecem indisponíveis, sem mocks. `SearchComposition` ordena predicados por custo, propaga candidate sets e retorna relatório explícito de degradação/indisponibilidade. `AnalysisComposition` processa batches versionáveis e isola falhas.
 - Engine modular — primeira migração SQLite (2026-09-10): `PhotoRepository.query` agora executa `SearchComposition` com `SqlCandidateIndex` e plugins SQL para metadata/data, screenshots, qualidade, OCR, duplicatas e similaridade; cursores e orçamento total continuam persistidos no candidate set. O antigo `packages/database/src/query.ts` foi removido. O runtime atual do repositório é Android baseline; injeção de capacidades reais por plataforma ainda é necessária antes da paridade iOS.
+- AST canônica (2026-09-10): parser, atalhos, seleções salvas e repositório constroem/consomem `SearchExpression` diretamente. Adapters `structuredPlanToExpression` e `expressionToStructuredPlan` foram removidos; novas features devem adicionar predicados e manifests, sem criar um formato paralelo.
 
 - Foundation de domínio (2026-09-10): `packages/core` expõe contratos agnósticos de plataforma para `Person`, `Place`, `Label`, `OCRText`, `QualitySignal`, `Selection`, `SearchIntent` e `ActionIntent`, todos com schemas Zod. Esses contratos não implicam que os produtores Android/iOS ou a persistência de seleções já existam. O foco de implementação/validação é Android; iOS só começa após o MVP Android.
 - MVP Fase 1 (2026-09-10): seleções nomeadas agora persistem em `saved_selections`/`saved_selection_members` (migration 3), com query opcional e reabertura no `LibraryScreen`; a mídia nunca é copiada. A seleção ainda é carregada como uma página limitada no UI. O scanner continua foreground e a validação do Development Build Android está bloqueada pelo toolchain NDK.
@@ -130,7 +132,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 `packages/core`: PhotoAsset, PhotoAnalysis, PhotoQuality, PhotoCluster, ScanJob,
 ScanProgressEvent, QueryPlan/PhotoQueryPlan, PhotoQuery, CleanupCandidate, PhotoEngine e IntentProvider.
-`packages/database`: schema version 6, foreign keys, WAL, migration transacional e FTS5
+`packages/database`: schema version 7, foreign keys, WAL, migration transacional e FTS5
 sincronizado por triggers. Consultas por data/tipo/tamanho/qualidade/screenshots/OCR/labels/clusters.
 O writer recebe lotes nativos e mantém `scan_jobs`; `getSummary` informa contagens e bytes conhecidos.
 `packages/photo-engine`: adapters de capacidades/permissões, leitura paginada, thumbnails, scanner e lixeira.

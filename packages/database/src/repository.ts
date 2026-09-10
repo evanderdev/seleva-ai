@@ -11,7 +11,7 @@ import type {
   Selection,
   SelectionContext,
 } from '@seleva/core';
-import { searchRequestSchema, expressionToStructuredPlan, CapabilityResolver, CapabilityRegistry, SearchComposition, manifestPlugins } from '@seleva/core';
+import { searchRequestSchema, predicates, CapabilityResolver, CapabilityRegistry, SearchComposition, manifestPlugins } from '@seleva/core';
 import type { SqlDatabase } from './connection';
 import { SqlCandidateIndex, createSqlCapabilityPlugins } from './search-index';
 
@@ -53,12 +53,16 @@ function pendingForStage(fastOnly = false): string {
     "CASE WHEN p.id LIKE 'ios:%' THEN 'ios-vision-1' ELSE 'android-heuristic-2' END";
   const fast =
     "CASE WHEN p.id LIKE 'ios:%' THEN 'ios-fast-1' ELSE 'android-fast-2' END";
-  return `(a.photo_id IS NULL OR a.analyzed_at < COALESCE(p.modified_at,0)
-    OR a.analysis_version != 1 OR COALESCE(a.model_version,'') NOT IN (${complete}${fastOnly ? `,${fast}` : ''})
-    OR EXISTS (
-      SELECT 1 FROM photo_analysis_capabilities pac
-      WHERE pac.photo_id = p.id AND pac.status = 'failed'
-    ))`;
+  const capabilities = fastOnly
+    ? "'content.screenshot','quality.visual','similarity.perceptual'"
+    : "'content.screenshot','quality.visual','similarity.perceptual','duplicate.exact','text.ocr'";
+  const required = fastOnly ? 3 : 5;
+  const models = fastOnly ? `${complete},${fast}` : complete;
+  return `(SELECT COUNT(*) FROM photo_analysis_capabilities pac
+    WHERE pac.photo_id = p.id AND pac.capability_id IN (${capabilities})
+      AND pac.status = 'completed' AND pac.analysis_version = 1
+      AND pac.model_version IN (${models})
+      AND pac.analyzed_at >= COALESCE(p.modified_at,0)) < ${required}`;
 }
 const pendingAnalysis = pendingForStage();
 
@@ -206,12 +210,11 @@ export class PhotoRepository {
       COALESCE(SUM(p.file_size IS NULL),0) AS unknownSizes,
       COALESCE(SUM(${pendingAnalysis}),0) AS pending,
       COALESCE(SUM(${pendingForStage(true)}),0) AS fastPending,
-      COALESCE(SUM(COALESCE(c.is_screenshot, a.is_screenshot) = 1),0) AS screenshots,
-      COALESCE(SUM(COALESCE(q.blur_score, a.blur_score) >= 0.55),0) AS blurry,
+      COALESCE(SUM(c.is_screenshot = 1),0) AS screenshots,
+      COALESCE(SUM(q.blur_score >= 0.55),0) AS blurry,
       COALESCE(SUM(p.media_type = 'video' AND p.file_size >= 524288000),0) AS largeVideos,
       COALESCE(SUM(CASE WHEN p.media_type = 'video' AND p.file_size >= 524288000 THEN p.file_size ELSE 0 END),0) AS largeVideoBytes
       FROM photos p
-      LEFT JOIN photo_analysis a ON a.photo_id = p.id
       LEFT JOIN photo_quality_signals q ON q.photo_id = p.id
       LEFT JOIN photo_content_signals c ON c.photo_id = p.id`);
     // One keeper per exact-content group, with every favorite protected. No visual
@@ -222,11 +225,10 @@ export class PhotoRepository {
     }>(`
       WITH ranked AS (
         SELECT p.file_size, p.favorite,
-          ROW_NUMBER() OVER (PARTITION BY COALESCE(h.content_hash, a.content_hash) ORDER BY p.favorite DESC, p.id) AS position
-        FROM photos p JOIN photo_analysis a ON a.photo_id = p.id
-        LEFT JOIN photo_hashes h ON h.photo_id = p.id
-        WHERE COALESCE(h.content_hash, a.content_hash) IS NOT NULL AND COALESCE(h.content_hash, a.content_hash) != ''
-          AND COALESCE(h.analyzed_at, a.analyzed_at) >= COALESCE(p.modified_at,0)
+          ROW_NUMBER() OVER (PARTITION BY h.content_hash ORDER BY p.favorite DESC, p.id) AS position
+        FROM photos p JOIN photo_hashes h ON h.photo_id = p.id
+        WHERE h.content_hash IS NOT NULL AND h.content_hash != ''
+          AND h.analyzed_at >= COALESCE(p.modified_at,0)
       ) SELECT COALESCE(SUM(file_size),0) AS duplicateBytes, COUNT(*) AS duplicateCopies
         FROM ranked WHERE position > 1 AND favorite = 0`);
     const [similar] = await this.db.getAllAsync<{ similarPhotos: number }>(`
@@ -259,7 +261,7 @@ export class PhotoRepository {
     if (!ids.length) return [];
     if (ids.length > 200) throw new Error('INVALID_BATCH_SIZE');
     const rows = await this.db.getAllAsync<{ id: string }>(
-      `SELECT p.id FROM photos p LEFT JOIN photo_analysis a ON a.photo_id=p.id
+      `SELECT p.id FROM photos p
        WHERE p.id IN (${ids.map(() => '?').join(',')}) AND ${pendingForStage(fastOnly)}`,
       ...ids,
     );
@@ -310,47 +312,6 @@ export class PhotoRepository {
             .filter((result) => result.status === 'completed')
             .map((result) => result.capabilityId),
         );
-        const ocrText = completedCapabilities.has('text.ocr')
-          ? analysis.ocrText ?? ''
-          : analysis.ocrText ?? null;
-        await tx.runAsync(
-          `INSERT INTO photo_analysis(
-            photo_id, blur_score, quality_score, brightness_score, face_count,
-            ocr_text, is_screenshot, is_document, is_meme, perceptual_hash,
-            content_hash, analysis_version, model_version, analyzed_at
-          ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-          ON CONFLICT(photo_id) DO UPDATE SET
-            blur_score=COALESCE(excluded.blur_score, photo_analysis.blur_score),
-            quality_score=COALESCE(excluded.quality_score, photo_analysis.quality_score),
-            brightness_score=COALESCE(excluded.brightness_score, photo_analysis.brightness_score),
-            face_count=COALESCE(excluded.face_count, photo_analysis.face_count),
-            ocr_text=COALESCE(excluded.ocr_text, photo_analysis.ocr_text),
-            is_screenshot=COALESCE(excluded.is_screenshot, photo_analysis.is_screenshot),
-            is_document=COALESCE(excluded.is_document, photo_analysis.is_document),
-            is_meme=COALESCE(excluded.is_meme, photo_analysis.is_meme),
-            perceptual_hash=COALESCE(excluded.perceptual_hash, photo_analysis.perceptual_hash),
-            content_hash=COALESCE(excluded.content_hash, photo_analysis.content_hash),
-            analysis_version=excluded.analysis_version, model_version=excluded.model_version,
-            analyzed_at=excluded.analyzed_at`,
-          analysis.photoId,
-          analysis.blurScore ?? null,
-          analysis.qualityScore ?? null,
-          analysis.brightnessScore ?? null,
-          analysis.faceCount ?? null,
-          ocrText,
-          analysis.isScreenshot === undefined
-            ? null
-            : Number(analysis.isScreenshot),
-          analysis.isDocument === undefined
-            ? null
-            : Number(analysis.isDocument),
-          analysis.isMeme === undefined ? null : Number(analysis.isMeme),
-          analysis.perceptualHash ?? null,
-          analysis.contentHash ?? null,
-          analysis.analysisVersion,
-          analysis.modelVersion ?? null,
-          analysis.analyzedAt,
-        );
         for (const result of analysis.capabilityResults ?? []) {
           await tx.runAsync(
             `INSERT INTO photo_analysis_capabilities(
@@ -373,23 +334,26 @@ export class PhotoRepository {
         if (
           analysis.blurScore !== undefined ||
           analysis.qualityScore !== undefined ||
-          analysis.brightnessScore !== undefined
+          analysis.brightnessScore !== undefined ||
+          analysis.faceCount !== undefined
         ) {
           await tx.runAsync(
             `INSERT INTO photo_quality_signals(
-              photo_id, blur_score, quality_score, brightness_score,
+              photo_id, blur_score, quality_score, brightness_score, face_count,
               analysis_version, model_version, analyzed_at
-            ) VALUES(?,?,?,?,?,?,?)
+            ) VALUES(?,?,?,?,?,?,?,?)
             ON CONFLICT(photo_id) DO UPDATE SET
               blur_score=COALESCE(excluded.blur_score, photo_quality_signals.blur_score),
               quality_score=COALESCE(excluded.quality_score, photo_quality_signals.quality_score),
               brightness_score=COALESCE(excluded.brightness_score, photo_quality_signals.brightness_score),
+              face_count=COALESCE(excluded.face_count, photo_quality_signals.face_count),
               analysis_version=excluded.analysis_version, model_version=excluded.model_version,
               analyzed_at=excluded.analyzed_at`,
             analysis.photoId,
             analysis.blurScore ?? null,
             analysis.qualityScore ?? null,
             analysis.brightnessScore ?? null,
+            analysis.faceCount ?? null,
             analysis.analysisVersion,
             analysis.modelVersion ?? null,
             analysis.analyzedAt,
@@ -468,53 +432,54 @@ export class PhotoRepository {
         ['exact', 'content_hash'],
         ['visual', 'perceptual_hash'],
       ] as const) {
-        const signal = `COALESCE(h.${column}, a.${column})`;
+        const signal = `h.${column}`;
         const key =
           kind === 'visual'
-            ? `CASE WHEN COALESCE(h.model_version, a.model_version) IN ('android-fast-2','android-heuristic-2') THEN 'android-v2:' ELSE 'legacy:' END || ${signal}`
+            ? `'android-v2:' || ${signal}`
             : signal;
+        const modelClause = kind === 'visual'
+          ? "AND h.model_version IN ('android-fast-2','android-heuristic-2')"
+          : '';
         await tx.runAsync(`INSERT INTO photo_clusters(id,kind,representative_id)
-          SELECT 'cluster-${kind}:' || ${key}, '${kind}', MIN(a.photo_id)
-          FROM photo_analysis a JOIN photos p ON p.id=a.photo_id
-          LEFT JOIN photo_hashes h ON h.photo_id=a.photo_id
+          SELECT 'cluster-${kind}:' || ${key}, '${kind}', MIN(h.photo_id)
+          FROM photo_hashes h JOIN photos p ON p.id=h.photo_id
           WHERE ${signal} IS NOT NULL AND ${signal} != ''
-            AND COALESCE(h.analyzed_at, a.analyzed_at) >= COALESCE(p.modified_at,0)
+            AND h.analyzed_at >= COALESCE(p.modified_at,0)
+            ${modelClause}
           GROUP BY ${key} HAVING COUNT(*) > 1`);
         await tx.runAsync(`INSERT INTO photo_cluster_members(cluster_id,photo_id)
-          SELECT c.id,a.photo_id FROM photo_analysis a JOIN photos p ON p.id=a.photo_id
-          LEFT JOIN photo_hashes h ON h.photo_id=a.photo_id
+          SELECT c.id,h.photo_id FROM photo_hashes h JOIN photos p ON p.id=h.photo_id
           JOIN photo_clusters c ON c.id = 'cluster-${kind}:' || ${key}
-          WHERE COALESCE(h.analyzed_at, a.analyzed_at) >= COALESCE(p.modified_at,0)`);
+          WHERE h.analyzed_at >= COALESCE(p.modified_at,0)
+            ${modelClause}`);
       }
       const distance = hammingExpression(
-        'COALESCE(ha.perceptual_hash, a.perceptual_hash)',
-        'COALESCE(hb.perceptual_hash, b.perceptual_hash)',
+        'a.perceptual_hash',
+        'b.perceptual_hash',
       );
       // The first four nibbles form a coarse bucket, avoiding an unbounded
       // all-against-all comparison on large libraries. Pairs are represented
       // independently; the query layer deduplicates photo IDs.
       await tx.runAsync(`INSERT INTO photo_clusters(id,kind,representative_id)
         SELECT 'cluster-similar:' || a.photo_id || ':' || b.photo_id, 'similar', a.photo_id
-        FROM photo_analysis a JOIN photo_analysis b ON a.photo_id < b.photo_id
+        FROM photo_hashes a JOIN photo_hashes b ON a.photo_id < b.photo_id
         JOIN photos pa ON pa.id=a.photo_id JOIN photos pb ON pb.id=b.photo_id
-        LEFT JOIN photo_hashes ha ON ha.photo_id=a.photo_id
-        LEFT JOIN photo_hashes hb ON hb.photo_id=b.photo_id
-        WHERE COALESCE(ha.perceptual_hash, a.perceptual_hash) IS NOT NULL
-          AND COALESCE(hb.perceptual_hash, b.perceptual_hash) IS NOT NULL
-          AND COALESCE(ha.perceptual_hash, a.perceptual_hash) != ''
-          AND COALESCE(hb.perceptual_hash, b.perceptual_hash) != ''
-          AND substr(COALESCE(ha.perceptual_hash, a.perceptual_hash),1,4) = substr(COALESCE(hb.perceptual_hash, b.perceptual_hash),1,4)
-          AND COALESCE(ha.model_version, a.model_version) IN ('android-fast-2','android-heuristic-2')
-          AND COALESCE(hb.model_version, b.model_version) IN ('android-fast-2','android-heuristic-2')
-          AND COALESCE(ha.analyzed_at, a.analyzed_at) >= COALESCE(pa.modified_at,0)
-          AND COALESCE(hb.analyzed_at, b.analyzed_at) >= COALESCE(pb.modified_at,0)
+        WHERE a.perceptual_hash IS NOT NULL
+          AND b.perceptual_hash IS NOT NULL
+          AND a.perceptual_hash != ''
+          AND b.perceptual_hash != ''
+          AND substr(a.perceptual_hash,1,4) = substr(b.perceptual_hash,1,4)
+          AND a.model_version IN ('android-fast-2','android-heuristic-2')
+          AND b.model_version IN ('android-fast-2','android-heuristic-2')
+          AND a.analyzed_at >= COALESCE(pa.modified_at,0)
+          AND b.analyzed_at >= COALESCE(pb.modified_at,0)
           AND ${distance} <= 8`);
       await tx.runAsync(`INSERT INTO photo_cluster_members(cluster_id,photo_id)
         SELECT id, representative_id FROM photo_clusters WHERE kind='similar'
         UNION ALL
         SELECT c.id, b.photo_id FROM photo_clusters c
-        JOIN photo_analysis a ON c.representative_id=a.photo_id
-        JOIN photo_analysis b ON c.id='cluster-similar:' || a.photo_id || ':' || b.photo_id
+        JOIN photo_hashes a ON c.representative_id=a.photo_id
+        JOIN photo_hashes b ON c.id='cluster-similar:' || a.photo_id || ':' || b.photo_id
         WHERE c.kind='similar'`);
     });
   }
@@ -624,9 +589,13 @@ export class PhotoRepository {
     const plugins = manifestPlugins().map(plugin => sqlById.get(plugin.manifest.id) ?? plugin);
     const registry = new CapabilityRegistry();
     plugins.forEach(plugin => registry.register(plugin));
-    const structured = expressionToStructuredPlan(plan.expression);
-    if (structured.exclusions?.albums || structured.exclusions?.importantPeople) throw new Error('UNSUPPORTED_EXCLUSION');
-    if (structured.filters?.people || structured.filters?.places || structured.filters?.sceneLabels || structured.filters?.source) throw new Error('UNSUPPORTED_ENTITY_FILTER');
+    const fields = predicates(plan.expression).flatMap((item) => {
+      if (typeof item.value !== 'object' || item.value === null || Array.isArray(item.value)) return [];
+      const field = (item.value as Record<string, unknown>).field;
+      return typeof field === 'string' ? [field] : [];
+    });
+    if (fields.some((field) => ['albums', 'importantPeople'].includes(field))) throw new Error('UNSUPPORTED_EXCLUSION');
+    if (fields.some((field) => ['people', 'places', 'sceneLabels', 'source'].includes(field))) throw new Error('UNSUPPORTED_ENTITY_FILTER');
     const runtime = { platform: 'android' as const, osVersion: 36, permissions: [], models: [], nativeApis: [], resources: 'normal' as const };
     const result = await new SearchComposition(new CapabilityResolver(registry), index).execute(searchRequestSchema.parse(plan), page, { runtime });
     if (result.report.unavailable.length) throw new Error('UNSUPPORTED_QUERY');
@@ -649,19 +618,28 @@ export class PhotoRepository {
       created_at: number;
     }>(
       `SELECT p.id, p.file_size, p.created_at,
-        COALESCE(c.is_screenshot, a.is_screenshot) AS is_screenshot,
-        COALESCE(q.blur_score, a.blur_score) AS blur_score
+        c.is_screenshot AS is_screenshot,
+        q.blur_score AS blur_score
        FROM photos p
-       LEFT JOIN photo_analysis a ON a.photo_id = p.id
        LEFT JOIN photo_content_signals c ON c.photo_id = p.id
        LEFT JOIN photo_quality_signals q ON q.photo_id = p.id
        WHERE p.id IN (${placeholders})`,
       ...ids,
     );
     const byId = new Map(rows.map((row) => [row.id, row]));
-    const filters = expressionToStructuredPlan(plan.expression).filters as {
+    const filters: {
       screenshot?: boolean; duplicate?: boolean; similar?: boolean; minBlur?: number; minFileSize?: number; before?: number;
-    } | undefined;
+    } = {};
+    for (const item of predicates(plan.expression)) {
+      if (typeof item.value !== 'object' || item.value === null || Array.isArray(item.value)) continue;
+      const value = item.value as Record<string, unknown>;
+      const field = value.field;
+      if (typeof field !== 'string') continue;
+      const actual = value.value;
+      if (['screenshot', 'duplicate', 'similar', 'minBlur', 'minFileSize', 'before'].includes(field)) {
+        (filters as Record<string, unknown>)[field] = actual;
+      }
+    }
     return result.assets.map((asset) => {
       const row = byId.get(asset.id);
       const reasons: CleanupReason[] = [];

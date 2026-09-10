@@ -1,5 +1,5 @@
 import { CapabilityResolver, createCapabilityRegistry, type CapabilityPlugin, type CandidateIndex, SearchComposition } from './index';
-import { predicate, searchExpressionSchema, structuredPlanToExpression } from './search-expression';
+import { and, predicate, searchExpressionSchema } from './search-expression';
 
 function runtime() { return { platform: 'android' as const, osVersion: 36, permissions: [], models: [], nativeApis: [], resources: 'normal' as const }; }
 describe('capability architecture', () => {
@@ -15,8 +15,12 @@ describe('capability architecture', () => {
     expect(result.availability.status).toBe('unavailable');
     expect(result.availability).toMatchObject({ reason: 'OS_INCOMPATIBLE' });
   });
-  it('validates boolean AST and structured boundary conversion', () => {
-    const expression = structuredPlanToExpression({ filters: { screenshot: true, ocrTerms: ['invoice'] }, exclusions: { favorites: true } });
+  it('validates the canonical boolean AST', () => {
+    const expression = and(
+      predicate('content.screenshot', 'eq', { field: 'screenshot', value: true }),
+      predicate('text.ocr', 'containsAny', { field: 'ocrTerms', value: ['invoice'] }),
+      { type: 'not', child: predicate('metadata.core', 'eq', { field: 'favorites', value: true }) },
+    );
     expect(searchExpressionSchema.safeParse(expression).success).toBe(true);
     expect(expression.type).toBe('and');
     expect(predicate('text.ocr', 'containsAny', 'invoice').capability).toBe('text.ocr');

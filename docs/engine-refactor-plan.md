@@ -102,7 +102,7 @@ Objetivo: fazer toda entrada do usuário terminar em `SearchExpression` e `Actio
 - Fazer matchers retornarem predicados e evidências, não campos crescentes em um objeto central.
 - Fazer o planner validar capabilities necessárias contra o resolver.
 - Preservar texto original apenas na interpretação; não persistir prompts crus nem enviar dados pessoais.
-- Remover `structuredPlanToExpression` depois que todos os atalhos e o parser estiverem nativos em AST.
+- Concluído: atalhos e parser constroem diretamente a AST canônica; `structuredPlanToExpression` foi removido.
 - Testar sequências cumulativas: pessoa → lugar → data → exclusão de screenshots → remoção de filtro.
 
 Saída: Intent Engine sem conhecimento de SQLite, galeria ou providers.
@@ -125,7 +125,7 @@ Saída: análise incremental usa a mesma registry e não duplica lógica entre s
 - `CapabilityRegistry` agora aceita providers de plataforma anexados a manifests já registrados.
 - O adapter Android registra analyzers para os estágios fast/deep e usa `AnalysisComposition` para cache, disponibilidade e lotes de até 20 assets.
 - A seleção nativa é despachada uma vez por lote; o `PhotoScanRunner` continua responsável por thumbnails, OCR, hashes, pausa, retomada e ACK após o commit SQLite.
-- A persistência mantém o payload agregado para compatibilidade, grava `photo_analysis_capabilities` com estado, versão, modelo e erro por capability e materializa sinais em `photo_quality_signals`, `photo_content_signals`, `photo_hashes` e `photo_ocr_text`. Os readers SQL usam as tabelas específicas com fallback para `photo_analysis`; o FTS legado continua como índice de compatibilidade.
+- A persistência grava estado, versão, modelo e erro por capability em `photo_analysis_capabilities` e materializa sinais em `photo_quality_signals`, `photo_content_signals`, `photo_hashes` e `photo_ocr_text`. Esses sinais são a única fonte de leitura; `photo_ocr_index` é derivado exclusivamente do texto OCR.
 
 ## Etapa 7 — remover a arquitetura antiga
 
@@ -137,6 +137,12 @@ Objetivo: deixar apenas um caminho de execução.
 - Atualizar documentação e ADRs para refletir somente o estado final.
 
 Saída: qualquer capability nova entra por manifest + provider + registro, sem alterar composition.
+
+### Incremento executado em 2026-09-10
+
+- O query builder legado já foi removido; `PhotoRepository` usa somente `SearchComposition`.
+- Os readers SQL e o writer usam somente sinais específicos; a migração 7 remove as tabelas agregadas e o FTS antigo.
+- A documentação e todos os consumidores usam diretamente `SearchRequest`/`SearchExpression`, sem adapter de compatibilidade.
 
 ## Etapa 8 — adicionar capabilities novas
 

@@ -1,14 +1,15 @@
 # Query engine
 
-QueryPlan/PhotoQueryPlan são validados por Zod. Screenshots, duplicatas e similares têm filtros
-distintos; banco consulta clusters quando existirem. Intervalos inválidos são rejeitados.
-Favoritas são excluídas por padrão. minSpaceToRecover é uma meta futura do planner de limpeza,
-não uma garantia da consulta; maxResults limita o conjunto total paginado.
+`SearchRequest` contém uma `SearchExpression` validada por Zod. Predicados de data, tipo,
+favoritos, screenshots, qualidade, OCR, duplicatas e similaridade são resolvidos por
+`SearchComposition` através do `CapabilityRegistry`.
 
-PhotoRepository executa o subconjunto implementado com SQL parametrizado, FTS5 e clusters de
-hashes calculados pelo worker nativo.
-Proteções não suportadas geram erro, nunca são ignoradas. O campo Ask Seleva usa o Seleva Intent
-Engine assíncrono: regras de alta confiança, datas naturais e fallback semântico multilíngue local
-geram um `SelevaIntent` validado e, quando suportado, o `QueryPlan` existente. Intenções reconhecidas
-que ainda não possuem API de galeria retornam um estado explícito. Nenhum provider executa exclusão.
-Ver `docs/intent-engine.md`.
+`PhotoRepository` executa os providers SQL com candidate sets lazy, FTS5, cursores e clusters
+calculados pelo worker nativo. Proteções não suportadas geram erro explícito; nunca são ignoradas.
+`minSpaceToRecover` continua sendo uma meta futura do planner de limpeza, enquanto `maxResults`
+limita o orçamento total paginado.
+
+O Intent Engine interpreta a linguagem natural localmente e entrega um `SearchRequest` com AST.
+Atalhos e parser constroem a mesma AST canônica diretamente; não existe um caminho estruturado
+paralelo para adaptar planos antigos. A composition não conhece o parser, SQLite ou providers
+nativos. Nenhum provider executa exclusão.

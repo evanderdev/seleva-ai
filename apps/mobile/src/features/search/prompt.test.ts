@@ -1,9 +1,16 @@
 import { createIntentEngine } from './intent-engine/engine';
 import { promptSchema } from './prompt';
-import { expressionToStructuredPlan } from '@seleva/core';
+import { predicates, type SearchExpression } from '@seleva/core';
 
-function filtersOf(query: { expression: Parameters<typeof expressionToStructuredPlan>[0] } | undefined) {
-  return query ? expressionToStructuredPlan(query.expression).filters as Record<string, unknown> | undefined : undefined;
+function filtersOf(query: { expression: SearchExpression } | undefined) {
+  if (!query) return undefined;
+  const filters: Record<string, unknown> = {};
+  for (const item of predicates(query.expression)) {
+    if (typeof item.value !== 'object' || item.value === null || Array.isArray(item.value)) continue;
+    const value = item.value as Record<string, unknown>;
+    if (typeof value.field === 'string') filters[value.field] = value.value;
+  }
+  return filters;
 }
 
 const engine = createIntentEngine();

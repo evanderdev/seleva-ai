@@ -46,13 +46,14 @@ export class SqlCandidateIndex implements CandidateIndex {
     if (predicate.capability === 'metadata.core' && field === 'mediaTypes' && Array.isArray(value) && value.every(item => item === 'photo' || item === 'video')) return append(base, `p.media_type IN (${value.map(() => '?').join(',')})`, value);
     if (predicate.capability === 'metadata.core' && (field === 'favorite' || field === 'favorites') && typeof value === 'boolean') return append(base, 'p.favorite = ?', [Number(value)]);
     if (predicate.capability === 'metadata.core' && field === 'minFileSize' && typeof value === 'number') return append(base, 'p.file_size >= ?', [value]);
-    if (predicate.capability === 'content.screenshot' && typeof value === 'boolean') return append(base, 'COALESCE(c.is_screenshot, a.is_screenshot, 0) = ?', [Number(value)]);
-    if (predicate.capability === 'quality.visual' && field === 'maxQuality' && typeof value === 'number') return append(base, 'COALESCE(q.quality_score, a.quality_score) <= ?', [value]);
-    if (predicate.capability === 'quality.visual' && field === 'minBlur' && typeof value === 'number') return append(base, 'COALESCE(q.blur_score, a.blur_score) >= ?', [value]);
-    if (predicate.capability === 'quality.visual' && field === 'hasFaces' && typeof value === 'boolean') return append(base, value ? 'a.face_count > 0' : 'a.face_count = 0', []);
+    if (predicate.capability === 'content.screenshot' && typeof value === 'boolean') return append(base, 'COALESCE(c.is_screenshot, 0) = ?', [Number(value)]);
+    if (predicate.capability === 'content.document' && typeof value === 'boolean') return append(base, `${value ? '' : 'NOT '}EXISTS (SELECT 1 FROM photo_ocr_text ot WHERE ot.photo_id = p.id AND length(trim(ot.ocr_text)) > 0)`, []);
+    if (predicate.capability === 'quality.visual' && field === 'maxQuality' && typeof value === 'number') return append(base, 'q.quality_score <= ?', [value]);
+    if (predicate.capability === 'quality.visual' && field === 'minBlur' && typeof value === 'number') return append(base, 'q.blur_score >= ?', [value]);
+    if (predicate.capability === 'quality.visual' && field === 'hasFaces' && typeof value === 'boolean') return append(base, value ? 'q.face_count > 0' : 'q.face_count = 0', []);
     if (predicate.capability === 'text.ocr' && field === 'ocrTerms' && Array.isArray(value) && value.every(item => typeof item === 'string')) {
       const match = value.map(item => `"${item.replaceAll('"', '""')}"`).join(' AND ');
-      return append(base, 'p.id IN (SELECT photo_id FROM photo_ocr WHERE photo_ocr MATCH ?)', [match]);
+      return append(base, 'p.id IN (SELECT photo_id FROM photo_ocr_index WHERE photo_ocr_index MATCH ?)', [match]);
     }
     if ((predicate.capability === 'duplicate.exact' || predicate.capability === 'similarity.perceptual') && typeof value === 'boolean') {
       const kinds = predicate.capability === 'duplicate.exact' ? "'exact','visual'" : "'exact','similar','visual'";
@@ -63,7 +64,7 @@ export class SqlCandidateIndex implements CandidateIndex {
   }
   rank(candidates: CandidateSet, strategy: string): SqlSet {
     const set = candidates as SqlSet;
-    const orderBy = strategy === 'largest' ? 'COALESCE(p.file_size, -1) DESC' : strategy === 'worst-quality' ? 'COALESCE(q.quality_score, a.quality_score, 2) ASC' : undefined;
+    const orderBy = strategy === 'largest' ? 'COALESCE(p.file_size, -1) DESC' : strategy === 'worst-quality' ? 'COALESCE(q.quality_score, 2) ASC' : undefined;
     if (!orderBy) throw new Error(`UNSUPPORTED_RANKING:${strategy}`);
     return { ...set, key: `${set.key}|rank:${strategy}`, orderBy };
   }
@@ -81,7 +82,6 @@ export class SqlCandidateIndex implements CandidateIndex {
     }
     const remaining = maxResults === undefined ? page.limit : Math.max(0, maxResults - consumed); const limit = Math.min(page.limit, remaining); const fetchLimit = maxResults === undefined ? limit + 1 : Math.min(limit + 1, remaining);
     const rows = await this.db.getAllAsync<PhotoRow>(`SELECT p.*, ${sortExpression} AS sort_value FROM photos p
-      LEFT JOIN photo_analysis a ON a.photo_id = p.id
       LEFT JOIN photo_quality_signals q ON q.photo_id = p.id
       LEFT JOIN photo_content_signals c ON c.photo_id = p.id
       WHERE ${where.join(' AND ')} ORDER BY ${orderBy}, p.id ${descending ? 'DESC' : 'ASC'} LIMIT ?`, ...params, fetchLimit);
@@ -104,12 +104,17 @@ class SqlRankingEngine {
   canHandle(strategy: string): boolean { return strategy === 'largest' || strategy === 'worst-quality'; }
   async rank(candidates: CandidateSet, strategy: string): Promise<CandidateSet> { return this.index.rank(candidates, strategy); }
 }
+class SqlDocumentEngine extends SqlPredicateEngine {
+  availability() { return { status: 'degraded' as const, reason: 'OCR_HEURISTIC' }; }
+}
 
 export function createSqlCapabilityPlugins(index: SqlCandidateIndex): CapabilityPlugin[] {
-  const supported = new Set(['metadata.core', 'query.date', 'content.screenshot', 'quality.visual', 'text.ocr', 'duplicate.exact', 'similarity.perceptual']);
+  const supported = new Set(['metadata.core', 'query.date', 'content.screenshot', 'content.document', 'quality.visual', 'text.ocr', 'duplicate.exact', 'similarity.perceptual']);
   return capabilityManifests.filter(manifest => supported.has(manifest.id)).map(manifest => ({
     manifest: { ...manifest, functions: [...new Set([...manifest.functions, 'search' as const])], dependencies: [...manifest.dependencies], fallbackCapabilities: [...manifest.fallbackCapabilities] },
-    searchEngines: [new SqlPredicateEngine(`sqlite.${manifest.id}`, manifest.id, index)],
+    searchEngines: [manifest.id === 'content.document'
+      ? new SqlDocumentEngine(`sqlite.${manifest.id}.ocr`, manifest.id, index)
+      : new SqlPredicateEngine(`sqlite.${manifest.id}`, manifest.id, index)],
     ...(manifest.id === 'quality.visual' ? { rankers: [new SqlRankingEngine(index)] } : {}),
   }));
 }

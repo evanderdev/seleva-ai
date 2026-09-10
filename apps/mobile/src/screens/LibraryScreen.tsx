@@ -34,9 +34,10 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { usePromptInterpreter } from '../features/search/usePromptInterpreter';
 import { LibraryStatus } from '../features/library/LibraryStatus';
 import { usePhotoRepository } from '../services/database';
-import { searchRequestSchema, structuredPlanToExpression, type SearchRequest, type SelectionContext } from '@seleva/core';
+import { searchRequestSchema, type SearchRequest, type SelectionContext } from '@seleva/core';
 import { LibraryGridItem } from '../features/library/components/LibraryGridItem';
 import { Thumbnail } from '../features/library/components/Thumbnail';
+import { filtersToExpression } from '../features/search/intent-engine/query';
 
 /** Bounded native preview. Indexing will feed SQLite in the scanner phase. */
 export function LibraryScreen({
@@ -243,7 +244,7 @@ export function LibraryScreen({
               if (similar) filters.similar = true;
               if (minBlur !== undefined) filters.minBlur = minBlur;
               if (ocrTerms?.length) filters.ocrTerms = ocrTerms;
-              const page = await repository.query(intentQuery ?? searchRequestSchema.parse({ expression: structuredPlanToExpression({ filters, exclusions: { favorites: false } }) }),
+              const page = await repository.query(intentQuery ?? searchRequestSchema.parse({ expression: filtersToExpression(filters, { favorites: false }) }),
                 { limit: 60, cursor },
               );
               return { ok: true as const, value: page };

@@ -2,8 +2,22 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from './migrations';
 import { PhotoRepository } from './repository';
 import type { SqlConnection, SqlDatabase, SqlValue } from './connection';
-import { searchRequestSchema, structuredPlanToExpression } from '@seleva/core';
-const queryPlanSchema = { parse: (value: { filters?: Record<string, unknown>; exclusions?: Record<string, unknown>; target?: { maxResults?: number }; ranking?: { strategy: string } }) => searchRequestSchema.parse({ expression: structuredPlanToExpression(value), target: value.target, ranking: value.ranking ? { capability: 'quality.visual', strategy: value.ranking.strategy } : undefined }) };
+import { and, predicate, searchRequestSchema, type SearchExpression, type SearchPredicate } from '@seleva/core';
+function structuredExpression(value: { filters?: Record<string, unknown>; exclusions?: Record<string, unknown> }): SearchExpression {
+  const children: SearchExpression[] = [];
+  const operators: Record<string, string> = { before: 'before', after: 'after', mediaTypes: 'in', ocrTerms: 'containsAny' };
+  for (const [field, actual] of Object.entries(value.filters ?? {})) {
+    if (actual === undefined) continue;
+    const capability = field === 'before' || field === 'after' ? 'query.date' : field === 'ocrTerms' ? 'text.ocr' : field === 'screenshot' ? 'content.screenshot' : field === 'document' ? 'content.document' : field === 'duplicate' ? 'duplicate.exact' : field === 'similar' ? 'similarity.perceptual' : field === 'minBlur' ? 'quality.visual' : 'metadata.core';
+    children.push(predicate(capability, operators[field] ?? 'eq', { field, value: actual } as SearchPredicate['value']));
+  }
+  for (const [field, actual] of Object.entries(value.exclusions ?? { favorites: true })) {
+    if (actual !== true && (!Array.isArray(actual) || actual.length === 0)) continue;
+    children.push({ type: 'not', child: predicate('metadata.core', 'eq', { field, value: actual } as SearchPredicate['value']) });
+  }
+  return children.length ? and(...children) : { type: 'and', children: [] };
+}
+const queryPlanSchema = { parse: (value: { filters?: Record<string, unknown>; exclusions?: Record<string, unknown>; target?: { maxResults?: number }; ranking?: { strategy: string } }) => searchRequestSchema.parse({ expression: structuredExpression(value), target: value.target, ranking: value.ranking ? { capability: 'quality.visual', strategy: value.ranking.strategy } : undefined }) };
 
 let sqlite: DatabaseSync;
 let db: SqlDatabase;
@@ -51,7 +65,7 @@ it('estimates only excess exact copies, retaining favorites and one keeper', asy
     await photo(id, favorite, 100, 1000);
     await analysis(id, '');
     await db.runAsync(
-      'UPDATE photo_analysis SET content_hash=? WHERE photo_id=?',
+      'UPDATE photo_hashes SET content_hash=? WHERE photo_id=?',
       hash,
       id,
     );
@@ -74,7 +88,7 @@ it('does not invent savings for unknown sizes or visual matches', async () => {
   await analysis('a', '');
   await analysis('b', '');
   await db.runAsync('UPDATE photos SET file_size=NULL');
-  await db.runAsync("UPDATE photo_analysis SET perceptual_hash='visual'");
+  await db.runAsync("UPDATE photo_hashes SET perceptual_hash='visual'");
   expect(await repository.getInsights()).toMatchObject({
     unknownSizes: 2,
     duplicateBytes: 0,
@@ -111,18 +125,32 @@ async function photo(id: string, favorite = 0, createdAt = 100, size = 1000) {
   );
 }
 async function analysis(id: string, text: string) {
-  await db.runAsync(
-    "INSERT INTO photo_analysis(photo_id,ocr_text,is_screenshot,analysis_version,model_version,analyzed_at) VALUES(?,?,1,1,'android-heuristic-2',100)",
-    id,
-    text,
-  );
+  await repository.upsertAnalyses([{
+    photoId: id,
+    analysisVersion: 1,
+    modelVersion: 'android-heuristic-2',
+    analyzedAt: 100,
+    ocrText: text,
+    isScreenshot: true,
+    blurScore: 0,
+    qualityScore: 0.5,
+    perceptualHash: `hash-${id}`,
+    contentHash: `content-${id}`,
+    capabilityResults: [
+      { capabilityId: 'content.screenshot', status: 'completed' },
+      { capabilityId: 'quality.visual', status: 'completed' },
+      { capabilityId: 'similarity.perceptual', status: 'completed' },
+      { capabilityId: 'duplicate.exact', status: 'completed' },
+      { capabilityId: 'text.ocr', status: 'completed' },
+    ],
+  }]);
 }
 it('migrates idempotently and preserves data', async () => {
   await photo('a');
   await migrate(db);
   expect((await repository.getSummary()).photos).toBe(1);
   expect(sqlite.prepare('PRAGMA user_version').get()).toEqual(
-      expect.objectContaining({ user_version: 6 }),
+      expect.objectContaining({ user_version: 7 }),
   );
 });
 it('paginates tied timestamps without duplicates and excludes favorites', async () => {
@@ -150,13 +178,13 @@ it('searches actual FTS and keeps it synchronized on update/delete', async () =>
   });
   expect((await repository.query(plan, { limit: 10 })).assets).toHaveLength(1);
   await db.runAsync(
-    'UPDATE photo_analysis SET ocr_text = ? WHERE photo_id = ?',
+    'UPDATE photo_ocr_text SET ocr_text = ? WHERE photo_id = ?',
     'Slack',
     'a',
   );
   expect((await repository.query(plan, { limit: 10 })).assets).toHaveLength(0);
   await db.runAsync('DELETE FROM photos WHERE id = ?', 'a');
-  expect(await db.getAllAsync('SELECT * FROM photo_ocr')).toHaveLength(0);
+  expect(await db.getAllAsync('SELECT * FROM photo_ocr_index')).toHaveLength(0);
 });
 it('includes exact-only and visual copies in similar photos without repeating assets', async () => {
   await repository.upsertAssets(
@@ -224,13 +252,19 @@ it('persists capability results and retries failed analyzers', async () => {
     ocrText: 'invoice',
     capabilityResults: [
       { capabilityId: 'quality.visual', status: 'completed' },
+      { capabilityId: 'content.screenshot', status: 'completed' },
+      { capabilityId: 'similarity.perceptual', status: 'completed' },
+      { capabilityId: 'duplicate.exact', status: 'completed' },
       { capabilityId: 'text.ocr', status: 'completed' },
     ],
   }]);
   expect(await db.getAllAsync<{ capability_id: string; status: string; error: string | null }>(
     'SELECT capability_id,status,error FROM photo_analysis_capabilities ORDER BY capability_id',
   )).toEqual([
+    { capability_id: 'content.screenshot', status: 'completed', error: null },
+    { capability_id: 'duplicate.exact', status: 'completed', error: null },
     { capability_id: 'quality.visual', status: 'completed', error: null },
+    { capability_id: 'similarity.perceptual', status: 'completed', error: null },
     { capability_id: 'text.ocr', status: 'completed', error: null },
   ]);
   expect(await db.getAllAsync<{ blur_score: number; is_screenshot: number; perceptual_hash: string; content_hash: string; ocr_text: string }>(
@@ -257,6 +291,18 @@ it('persists capability results and retries failed analyzers', async () => {
     capabilityResults: [{ capabilityId: 'text.ocr', status: 'failed', error: 'OCR_FAILED' }],
   }]);
   expect(await repository.getPendingAnalysisIds(['capability-photo'])).toEqual(['capability-photo']);
+});
+it('uses the explicit degraded document capability through local OCR', async () => {
+  await photo('document');
+  await photo('plain');
+  await repository.upsertAnalyses([
+    { photoId: 'document', analysisVersion: 1, analyzedAt: 10, ocrText: 'Invoice 123' },
+  ]);
+  const result = await repository.query(
+    queryPlanSchema.parse({ filters: { document: true } }),
+    { limit: 10 },
+  );
+  expect(result.assets.map((asset) => asset.id)).toEqual(['document']);
 });
 
 it('persists native analysis and builds duplicate clusters', async () => {
@@ -446,6 +492,11 @@ it('invalidates old Android hashes and never groups them with the new algorithm'
       analyzedAt: Date.now(),
       modelVersion: index === 0 ? 'android-heuristic-1' : 'android-fast-2',
       perceptualHash: '0123456789abcdef',
+      capabilityResults: [
+        { capabilityId: 'content.screenshot', status: 'completed' },
+        { capabilityId: 'quality.visual', status: 'completed' },
+        { capabilityId: 'similarity.perceptual', status: 'completed' },
+      ],
     })),
   );
   expect(
@@ -542,10 +593,10 @@ it('selects only new, changed and outdated analyses in a bounded batch', async (
     await analysis(id, 'saved OCR');
   await db.runAsync("UPDATE photos SET modified_at=200 WHERE id='changed'");
   await db.runAsync(
-    "UPDATE photo_analysis SET analysis_version=0 WHERE photo_id='old-version'",
+    "UPDATE photo_analysis_capabilities SET analysis_version=0 WHERE photo_id='old-version'",
   );
   await db.runAsync(
-    "UPDATE photo_analysis SET model_version='old' WHERE photo_id='old-model'",
+    "UPDATE photo_analysis_capabilities SET model_version='old' WHERE photo_id='old-model'",
   );
   expect(
     (
@@ -570,7 +621,7 @@ it('selects only new, changed and outdated analyses in a bounded batch', async (
   ]);
   expect(await repository.getPendingAnalysisIds(['cached'])).toEqual([]);
   const [row] = await db.getAllAsync<{ ocr_text: string }>(
-    "SELECT ocr_text FROM photo_analysis WHERE photo_id='cached'",
+    "SELECT ocr_text FROM photo_ocr_text WHERE photo_id='cached'",
   );
   expect(row?.ocr_text).toBe('saved OCR');
   await expect(
@@ -592,6 +643,11 @@ it.each(['android', 'ios'])(
         modelVersion: platform === 'ios' ? 'ios-fast-1' : 'android-fast-2',
         analyzedAt: Date.now(),
         blurScore: 0.7,
+        capabilityResults: [
+          { capabilityId: 'content.screenshot', status: 'completed' },
+          { capabilityId: 'quality.visual', status: 'completed' },
+          { capabilityId: 'similarity.perceptual', status: 'completed' },
+        ],
       },
     ]);
     expect(await repository.getPendingAnalysisIds([id], true)).toEqual([]);
@@ -604,6 +660,13 @@ it.each(['android', 'ios'])(
           platform === 'ios' ? 'ios-vision-1' : 'android-heuristic-2',
         analyzedAt: Date.now(),
         ocrText: 'receipt',
+        capabilityResults: [
+          { capabilityId: 'content.screenshot', status: 'completed' },
+          { capabilityId: 'quality.visual', status: 'completed' },
+          { capabilityId: 'similarity.perceptual', status: 'completed' },
+          { capabilityId: 'duplicate.exact', status: 'completed' },
+          { capabilityId: 'text.ocr', status: 'completed' },
+        ],
       },
     ]);
     expect(await repository.getPendingAnalysisIds([id], true)).toEqual([]);
