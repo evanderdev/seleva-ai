@@ -160,7 +160,7 @@ Cada capability deve ter provider real, disponibilidade explícita, persistênci
 ### Incremento executado em 2026-09-10
 
 - `content.document` usa OCR local como provider heurístico degradado, com predicate e índice FTS próprios.
-- `people.face` usa `face_count` persistido pelo analyzer nativo e provider SQL dedicado, mantendo o filtro separado de qualidade visual.
+- `people.face` permanece explicitamente indisponível neste baseline porque o runtime Android ainda reporta `faceDetection: false`; o catálogo não registra provider SQL falso.
 
 ## Etapa 9 — ranking, ações e seleção
 

@@ -305,20 +305,6 @@ it('uses the explicit degraded document capability through local OCR', async () 
   expect(result.assets.map((asset) => asset.id)).toEqual(['document']);
 });
 
-it('queries the face capability from persisted quality signals', async () => {
-  await photo('faces');
-  await photo('empty');
-  await repository.upsertAnalyses([
-    { photoId: 'faces', analysisVersion: 1, analyzedAt: 10, modelVersion: 'android-heuristic-2', faceCount: 2 },
-    { photoId: 'empty', analysisVersion: 1, analyzedAt: 10, modelVersion: 'android-heuristic-2', faceCount: 0 },
-  ]);
-  const result = await repository.query(
-    queryPlanSchema.parse({ filters: { hasFaces: true } }),
-    { limit: 10 },
-  );
-  expect(result.assets.map((asset) => asset.id)).toEqual(['faces']);
-});
-
 it('persists native analysis and builds duplicate clusters', async () => {
   await repository.upsertAssets([
     { id: 'a', mediaType: 'photo', createdAt: 1, width: 10, height: 10 },
@@ -402,6 +388,23 @@ it('sorts large media and persists preferences', async () => {
   await repository.setPreference('locale', 'pt-BR');
   await repository.setPreference('locale', 'es');
   expect(await repository.getPreference('locale')).toBe('es');
+});
+it('ranks redundant and least-important candidates through SQL providers', async () => {
+  await repository.upsertAssets([
+    { id: 'kept', mediaType: 'photo', createdAt: 10, width: 10, height: 10, isFavorite: true },
+    { id: 'copy-a', mediaType: 'photo', createdAt: 20, width: 10, height: 10 },
+    { id: 'copy-b', mediaType: 'photo', createdAt: 30, width: 10, height: 10 },
+  ]);
+  await repository.upsertAnalyses([
+    { photoId: 'kept', analysisVersion: 1, analyzedAt: 100, modelVersion: 'android-heuristic-2', contentHash: 'same', qualityScore: 0.9, faceCount: 1 },
+    { photoId: 'copy-a', analysisVersion: 1, analyzedAt: 100, modelVersion: 'android-heuristic-2', contentHash: 'same', qualityScore: 0.2, faceCount: 0 },
+    { photoId: 'copy-b', analysisVersion: 1, analyzedAt: 100, modelVersion: 'android-heuristic-2', contentHash: 'same', qualityScore: 0.3, faceCount: 0 },
+  ]);
+  await repository.rebuildClusters();
+  const redundant = await repository.query(queryPlanSchema.parse({ ranking: { strategy: 'most-redundant' }, exclusions: { favorites: false } }), { limit: 3 });
+  expect(redundant.assets).toHaveLength(3);
+  const leastImportant = await repository.query(queryPlanSchema.parse({ ranking: { strategy: 'least-important' }, exclusions: { favorites: false } }), { limit: 3 });
+  expect(leastImportant.assets.map((asset) => asset.id)).toEqual(['copy-a', 'copy-b', 'kept']);
 });
 it('upserts native batches and persists resumable scan state', async () => {
   await repository.upsertAssets([

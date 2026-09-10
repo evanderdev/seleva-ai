@@ -50,7 +50,6 @@ export class SqlCandidateIndex implements CandidateIndex {
     if (predicate.capability === 'content.document' && typeof value === 'boolean') return append(base, `${value ? '' : 'NOT '}EXISTS (SELECT 1 FROM photo_ocr_text ot WHERE ot.photo_id = p.id AND length(trim(ot.ocr_text)) > 0)`, []);
     if (predicate.capability === 'quality.visual' && field === 'maxQuality' && typeof value === 'number') return append(base, 'q.quality_score <= ?', [value]);
     if (predicate.capability === 'quality.visual' && field === 'minBlur' && typeof value === 'number') return append(base, 'q.blur_score >= ?', [value]);
-    if (predicate.capability === 'people.face' && field === 'hasFaces' && typeof value === 'boolean') return append(base, value ? 'q.face_count > 0' : 'q.face_count = 0', []);
     if (predicate.capability === 'text.ocr' && field === 'ocrTerms' && Array.isArray(value) && value.every(item => typeof item === 'string')) {
       const match = value.map(item => `"${item.replaceAll('"', '""')}"`).join(' AND ');
       return append(base, 'p.id IN (SELECT photo_id FROM photo_ocr_index WHERE photo_ocr_index MATCH ?)', [match]);
@@ -64,7 +63,15 @@ export class SqlCandidateIndex implements CandidateIndex {
   }
   rank(candidates: CandidateSet, strategy: string): SqlSet {
     const set = candidates as SqlSet;
-    const orderBy = strategy === 'largest' ? 'COALESCE(p.file_size, -1) DESC' : strategy === 'worst-quality' ? 'COALESCE(q.quality_score, 2) ASC' : undefined;
+    const orderBy = strategy === 'largest'
+      ? 'COALESCE(p.file_size, -1) DESC'
+      : strategy === 'worst-quality'
+        ? 'COALESCE(q.quality_score, 2) ASC'
+        : strategy === 'most-redundant'
+          ? `(SELECT COUNT(*) FROM photo_cluster_members rm WHERE rm.photo_id = p.id) DESC`
+          : strategy === 'least-important'
+            ? `(p.favorite * 1000000 + COALESCE(q.face_count, 0) * 10000 + COALESCE(q.quality_score, 2) * 1000 + p.created_at / 1000000000000.0) ASC`
+            : undefined;
     if (!orderBy) throw new Error(`UNSUPPORTED_RANKING:${strategy}`);
     return { ...set, key: `${set.key}|rank:${strategy}`, orderBy };
   }
@@ -101,7 +108,7 @@ class SqlPredicateEngine implements SearchEngine {
 class SqlRankingEngine {
   readonly id = 'sqlite.quality.ranking'; readonly capabilityId = 'quality.visual'; readonly version = '1'; readonly priority = 10;
   constructor(private readonly index: SqlCandidateIndex) {}
-  canHandle(strategy: string): boolean { return strategy === 'largest' || strategy === 'worst-quality'; }
+  canHandle(strategy: string): boolean { return ['largest', 'worst-quality', 'most-redundant', 'least-important'].includes(strategy); }
   async rank(candidates: CandidateSet, strategy: string): Promise<CandidateSet> { return this.index.rank(candidates, strategy); }
 }
 class SqlDocumentEngine extends SqlPredicateEngine {
@@ -109,7 +116,7 @@ class SqlDocumentEngine extends SqlPredicateEngine {
 }
 
 export function createSqlCapabilityPlugins(index: SqlCandidateIndex): CapabilityPlugin[] {
-  const supported = new Set(['metadata.core', 'query.date', 'content.screenshot', 'content.document', 'quality.visual', 'people.face', 'text.ocr', 'duplicate.exact', 'similarity.perceptual']);
+  const supported = new Set(['metadata.core', 'query.date', 'content.screenshot', 'content.document', 'quality.visual', 'text.ocr', 'duplicate.exact', 'similarity.perceptual']);
   return capabilityManifests.filter(manifest => supported.has(manifest.id)).map(manifest => ({
     manifest: { ...manifest, functions: [...new Set([...manifest.functions, 'search' as const])], dependencies: [...manifest.dependencies], fallbackCapabilities: [...manifest.fallbackCapabilities] },
     searchEngines: [manifest.id === 'content.document'
