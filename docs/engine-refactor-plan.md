@@ -184,6 +184,11 @@ Cada capability deve ter provider real, disponibilidade explícita, persistênci
 - Exercitar 30k+ assets com métricas de RAM, bateria, temperatura, tempo de indexação e retomada.
 - Atualizar `MEMORY.md` somente com fatos verificados.
 
+### Incremento executado em 2026-09-10
+
+- Validação automatizada concluída: 97 testes Jest, typecheck dos seis pacotes e lint passaram.
+- Validação de Development Build, aparelho, iOS e carga de 30k+ assets permanece reservada para o fechamento do plano, sem executar o app nesta etapa.
+
 ## Critérios para considerar a refatoração encerrada
 
 - A UI chama uma única Search Composition.
