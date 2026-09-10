@@ -34,7 +34,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { usePromptInterpreter } from '../features/search/usePromptInterpreter';
 import { LibraryStatus } from '../features/library/LibraryStatus';
 import { usePhotoRepository } from '../services/database';
-import type { QueryPlan } from '@seleva/core';
+import type { QueryPlan, SelectionContext } from '@seleva/core';
 import { LibraryGridItem } from '../features/library/components/LibraryGridItem';
 import { Thumbnail } from '../features/library/components/Thumbnail';
 
@@ -99,6 +99,7 @@ export function LibraryScreen({
   const { interpret, interpreting, intentError, clearIntentError } =
     usePromptInterpreter();
   const [intentQuery, setIntentQuery] = useState(initialQuery);
+  const [intentContext, setIntentContext] = useState<SelectionContext>();
   const [selectionId, setSelectionId] = useState(initialSelectionId);
   const [queryInvalid, setQueryInvalid] = useState(initialQueryInvalid);
   const [intentNotice, setIntentNotice] = useState(initialIntentNotice);
@@ -108,7 +109,7 @@ export function LibraryScreen({
     if (!selectionName.trim() || !selected.length || savingSelection) return;
     setSavingSelection(true);
     try {
-      await repository.saveSelection(selectionName, selected, intentQuery);
+      await repository.saveSelection(selectionName, selected, intentQuery, intentContext);
       setSaveSelectionModal(false);
       setSelectionName('');
     } finally {
@@ -131,6 +132,7 @@ export function LibraryScreen({
     setMinBlur(undefined);
     setOcrTerms(undefined);
     setIntentQuery(result.query);
+    setIntentContext(result.selectionContext);
     setQueryInvalid(false);
     setIntentNotice(result.notice);
     setSearchVersion((value) => value + 1);
@@ -139,6 +141,7 @@ export function LibraryScreen({
   }
   function clearFilter() {
     setSelectionId(undefined);
+    setIntentContext(undefined);
     setIntentQuery(undefined);
     setQueryInvalid(false);
     setIntentNotice(false);
@@ -206,6 +209,7 @@ export function LibraryScreen({
           if (request !== generation.current) return;
           setPage(selectionPage);
           setSelected(selection.assetIds);
+          setIntentContext(selection.context);
           setPrompt(selection.name);
           setBusy(false);
           return;

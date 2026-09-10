@@ -1,4 +1,5 @@
 import { deterministicProvider } from './deterministic';
+import { createSelectionContext, reduceSelectionContext } from '@seleva/core';
 import { normalizer } from './normalizer';
 import { planner } from './planner';
 import {
@@ -9,7 +10,6 @@ import {
   type IntentNormalizer,
   type IntentPlanner,
   type SemanticMatcher,
-  type SelevaIntent,
 } from './types';
 
 export function createIntentEngine(
@@ -114,16 +114,11 @@ export function createIntentEngine(
       measure('semanticDuration');
       if (intent.cleanupCandidate || intent.destructive)
         intent.query.exclusions.favorites = true;
-      // Context only applies to an explicit refine action, never to a fresh search.
-      if (intent.action === 'refine' && context.previousIntent) {
-        const previous: SelevaIntent = intentSchema.parse(
-          context.previousIntent,
-        );
-        intent.query.filters = {
-          ...previous.query.filters,
-          ...intent.query.filters,
-        };
-      }
+      const operation = intent.operation ?? (intent.action === 'refine' ? 'restrict' : 'new');
+      const selectionContext = operation === 'new' && !context.selectionContext
+        ? createSelectionContext(intent.query)
+        : reduceSelectionContext(context.selectionContext, operation, intent.query);
+      intent.query = selectionContext.query;
       intent = intentSchema.parse(intent);
       measure('validationDuration');
       const negativeOrUnion =
@@ -142,10 +137,18 @@ export function createIntentEngine(
         : await (config.planner ?? planner).createPlan(intent);
       measure('plannerDuration');
       durations.totalDuration = performance.now() - started;
+      // Aggregated, privacy-safe timings. No prompt text or photo metadata is recorded.
+      durations.language_id_ms = durations.normalizationDuration ?? 0;
+      durations.translation_ms = durations.normalizationDuration ?? 0;
+      durations.deterministic_ms = durations.nlpAndDateDuration ?? 0;
+      durations.semantic_ms = durations.semanticDuration ?? 0;
+      durations.context_reduce_ms = durations.validationDuration ?? 0;
+      durations.planner_ms = durations.plannerDuration ?? 0;
       return {
         normalized,
         interpretation: { intent, confidence },
         plan,
+        selectionContext,
         ...(config.debug
           ? { debug: { semanticUsed, degraded, matches, durations } }
           : {}),

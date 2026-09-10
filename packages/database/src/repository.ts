@@ -9,6 +9,7 @@ import type {
   ScanStatus,
   QueryPlan,
   Selection,
+  SelectionContext,
 } from '@seleva/core';
 import type { SqlDatabase } from './connection';
 import { buildPhotoQuery } from './query';
@@ -43,6 +44,7 @@ interface SelectionRow {
   query_json: string | null;
   created_at: number;
   updated_at: number;
+  context_json: string | null;
 }
 // Full analyses satisfy fast work too. Android v2 fixes whole-image visual hashing.
 function pendingForStage(fastOnly = false): string {
@@ -94,14 +96,19 @@ export class PhotoRepository {
       'SELECT photo_id FROM saved_selection_members WHERE selection_id=? ORDER BY photo_id', row.id,
     );
     let query: QueryPlan | undefined;
+    let context: SelectionContext | undefined;
     if (row.query_json) {
       try { query = JSON.parse(row.query_json) as QueryPlan; } catch { query = undefined; }
+    }
+    if (row.context_json) {
+      try { context = JSON.parse(row.context_json) as SelectionContext; } catch { context = undefined; }
     }
     return {
       id: row.id,
       name: row.name,
       assetIds: members.map((member) => member.photo_id),
       query,
+      context,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -111,6 +118,7 @@ export class PhotoRepository {
     name: string,
     assetIds: string[],
     query?: QueryPlan,
+    context?: SelectionContext,
   ): Promise<Selection> {
     const cleanName = name.trim();
     if (!cleanName || cleanName.length > 120) throw new Error('INVALID_SELECTION_NAME');
@@ -120,8 +128,8 @@ export class PhotoRepository {
     const id = `selection-${now}-${Math.random().toString(36).slice(2, 8)}`;
     await this.db.withExclusiveTransactionAsync(async (tx) => {
       await tx.runAsync(
-        'INSERT INTO saved_selections(id,name,query_json,created_at,updated_at) VALUES(?,?,?,?,?)',
-        id, cleanName, query ? JSON.stringify(query) : null, now, now,
+        'INSERT INTO saved_selections(id,name,query_json,created_at,updated_at,context_json) VALUES(?,?,?,?,?,?)',
+        id, cleanName, query ? JSON.stringify(query) : null, now, now, context ? JSON.stringify(context) : null,
       );
       for (const assetId of ids)
         await tx.runAsync(
@@ -129,7 +137,7 @@ export class PhotoRepository {
           id, assetId,
         );
     });
-    return { id, name: cleanName, assetIds: ids, query, createdAt: now, updatedAt: now };
+    return { id, name: cleanName, assetIds: ids, query, context, createdAt: now, updatedAt: now };
   }
 
   async getSelections(): Promise<Selection[]> {

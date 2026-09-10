@@ -9,6 +9,11 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import com.google.mlkit.nl.languageid.LanguageIdentification
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.TranslatorOptions
+import com.google.mlkit.common.model.DownloadConditions
 
 class SelevaPhotoEngineModule : Module() {
   private val trashRequestCode = 7314
@@ -142,6 +147,28 @@ class SelevaPhotoEngineModule : Module() {
         "embeddings" to false, "nativeLLM" to false, "backgroundIndexing" to false,
         "performanceTier" to tier
       ))
+    }
+
+    AsyncFunction("identifyLanguage") { text: String, promise: Promise ->
+      LanguageIdentification.getClient().identifyLanguage(text)
+        .addOnSuccessListener { language ->
+          promise.resolve(mapOf("language" to if (language == "und") "und" else language, "confidence" to if (language == "und") 0.0 else 0.9))
+        }
+        .addOnFailureListener { promise.reject("UNKNOWN", "Language identification unavailable", it) }
+    }
+
+    AsyncFunction("translateToEnglish") { text: String, sourceLanguage: String, promise: Promise ->
+      val source = TranslateLanguage.fromLanguageTag(sourceLanguage)
+      if (source == null || source == TranslateLanguage.ENGLISH) {
+        promise.resolve(text)
+        return@AsyncFunction
+      }
+      val translator = Translation.getClient(TranslatorOptions.Builder().setSourceLanguage(source).setTargetLanguage(TranslateLanguage.ENGLISH).build())
+      translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
+        .onSuccessTask { translator.translate(text) }
+        .addOnSuccessListener { promise.resolve(it) }
+        .addOnFailureListener { promise.reject("TRANSLATION_UNAVAILABLE", "Translation model unavailable", it) }
+        .addOnCompleteListener { translator.close() }
     }
 
     AsyncFunction("getPermission") { promise: Promise ->

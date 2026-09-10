@@ -186,3 +186,12 @@ O APK anterior falhava antes do JavaScript porque `expo.modules.ExpoModulesPacka
 - Seleções salvas agora aparecem na Home, no mesmo grid das categorias, com nome e quantidade de itens.
 - A navegação envia somente o `selectionId`; a página de resultados recupera a seleção pelo SQLite e pagina seus membros em blocos de 60.
 - A seleção salva continua podendo ser revisada e explicitamente enviada à lixeira. Ao editar ou limpar o filtro, o fluxo volta para uma consulta normal.
+
+## Implementação do refinamento do engine (2026-09-10)
+
+- SelectionContext agora possui reducer puro com operações `new`, `add`, `restrict`, `exclude`, `remove`, `replace` e `broaden`; o contexto pequeno pode ser persistido junto a seleções salvas (migration 4).
+- A pipeline mantém texto original, normalização NFKC, identificação/tradução ML Kit Android opcionais e fallback multilíngue determinístico. Language ID/Translate são expostos pelo Expo Module sem tornar a busca dependente de modelo ou rede.
+- Matchers determinísticos são registráveis e retornam evidências; o planner expõe métricas agregadas (`language_id_ms`, `translation_ms`, `deterministic_ms`, `semantic_ms`, `context_reduce_ms`, `planner_ms`) sem registrar prompts ou dados pessoais.
+- QueryPlan ganhou entidades preparadas (`people`, `places`, `sceneLabels`, `source`) e exclusões de screenshots/labels. Filtros ainda não indexados retornam `filterUnavailable` explicitamente.
+- Ações destrutivas agora produzem `ActionIntent` de `trash` com revisão obrigatória; a UI continua responsável pela prévia, confirmação e API de lixeira do sistema.
+- Typecheck, lint e 91 testes passaram. APK Android arm64 foi compilado com ML Kit Language ID/Translate; instalação no aparelho conectado ficou pendente porque o `adb install` não respondeu.

@@ -1,4 +1,4 @@
-import { queryPlanSchema, type QueryPlan } from '@seleva/core';
+import { queryPlanSchema, selectionOperationSchema, type ActionIntent, type QueryPlan, type SelectionContext } from '@seleva/core';
 import { z } from 'zod';
 
 export const promptSchema = z.string().trim().min(1).max(500);
@@ -12,6 +12,9 @@ export const intentSchema = z.strictObject({
     'organize',
     'compare',
     'refine',
+    'favorite',
+    'unfavorite',
+    'share',
   ]),
   query: queryPlanSchema,
   concepts: z
@@ -36,6 +39,7 @@ export const intentSchema = z.strictObject({
   freeSpace: z.boolean().default(false),
   destructive: z.boolean().default(false),
   bestShot: z.boolean().default(false),
+  operation: selectionOperationSchema.default('new'),
 });
 export type SelevaIntent = z.infer<typeof intentSchema>;
 export interface IntentContext {
@@ -43,13 +47,18 @@ export interface IntentContext {
   /** Dates use the device's local timezone, with an injectable clock. */
   now?: Date;
   previousIntent?: SelevaIntent;
+  selectionContext?: SelectionContext;
 }
 export interface NormalizedIntentInput {
   originalText: string;
   originalLanguage?: string;
   canonicalText?: string;
-  canonicalLanguage?: 'en';
+  canonicalLanguage?: 'en' | 'original';
   normalizationStrategy: 'passthrough' | 'multilingual' | 'translation';
+  normalizedOriginalText?: string;
+  detectedLanguage?: string;
+  languageConfidence?: number;
+  translationStatus?: 'not-needed' | 'translated' | 'unavailable' | 'failed';
 }
 export interface IntentNormalizer {
   normalize(
@@ -61,6 +70,8 @@ export interface DeterministicResult {
   intent: SelevaIntent;
   confidence: number;
   unresolved: boolean;
+  evidence?: Array<{ matcher: string; text: string }>;
+  residual?: string;
 }
 export interface DeterministicIntentProvider {
   interpret(
@@ -98,10 +109,13 @@ export type PlanNotice =
   | 'cleanupRankingUnavailable'
   | 'spaceTargetUnavailable'
   | 'bestShotUnavailable'
-  | 'actionUnavailable';
+  | 'actionUnavailable'
+  | 'filterUnavailable'
+  | 'ambiguousOperation';
 export interface IntentExecutionPlan {
   status: 'ready' | 'clarification' | 'unsupported';
   query?: QueryPlan;
+  action?: ActionIntent;
   notices: PlanNotice[];
   requiresReview: true;
 }
@@ -112,6 +126,7 @@ export interface IntentInterpretation {
   normalized: NormalizedIntentInput;
   interpretation: { intent: SelevaIntent; confidence: number };
   plan: IntentExecutionPlan;
+  selectionContext?: SelectionContext;
   /** Returned only when explicitly enabled; never logged or persisted. */
   debug?: {
     semanticUsed: boolean;

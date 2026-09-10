@@ -84,4 +84,29 @@ describe('Seleva Intent Engine', () => {
     expect(promptSchema.safeParse('  ').success).toBe(false);
     await expect(engine.interpret({ text: 'x'.repeat(501) })).rejects.toThrow();
   });
+
+  it.each([
+    ['find screenshots', { screenshot: true }],
+    ['encontre prints', { screenshot: true }],
+    ['buscar capturas de pantalla', { screenshot: true }],
+  ])('golden corpus keeps multilingual intent stable: %s', async (text, expected) => {
+    const result = await engine.interpret({ text, context: { now } });
+    expect(result.plan.query?.filters).toMatchObject(expected);
+    expect(result.normalized.originalText).toBe(text);
+  });
+
+  it('returns a reviewable ActionIntent for destructive language', async () => {
+    const result = await engine.interpret({ text: 'delete blurry photos', context: { now } });
+    expect(result.plan.action).toEqual({ action: 'trash', requiresConfirmation: true });
+    expect(result.plan.requiresReview).toBe(true);
+  });
+
+  it('applies a refinement to the accumulated selection context', async () => {
+    const first = await engine.interpret({ text: 'screenshots', context: { now } });
+    const second = await engine.interpret({
+      text: 'refine before 2025',
+      context: { now, selectionContext: first.selectionContext },
+    });
+    expect(second.plan.query?.filters).toMatchObject({ screenshot: true, before: new Date(2025, 0, 1).getTime() });
+  });
 });

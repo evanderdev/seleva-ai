@@ -84,6 +84,10 @@ CREATE TABLE saved_selection_members (
 CREATE INDEX saved_selection_members_photo ON saved_selection_members(photo_id);
 `,
   },
+  {
+    version: 4,
+    sql: `ALTER TABLE saved_selections ADD COLUMN context_json TEXT;`,
+  },
 ] as const;
 
 export async function migrate(db: SqlDatabase): Promise<void> {

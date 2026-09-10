@@ -21,8 +21,9 @@ export interface Label { name: string; confidence?: number; }
 export interface OCRText { text: string; language?: string; confidence?: number; }
 export type QualitySignalKind = 'blur' | 'brightness' | 'contrast' | 'face' | 'resolution' | 'noise' | 'composition';
 export interface QualitySignal { kind: QualitySignalKind; score: number; }
-export interface Selection { id: string; name: string; assetIds: string[]; query?: QueryPlan; createdAt: number; updatedAt: number; }
-export type SelectionOperation = 'add' | 'restrict' | 'exclude' | 'remove' | 'replace' | 'broaden';
+export interface Selection { id: string; name: string; assetIds: string[]; query?: QueryPlan; context?: SelectionContext; createdAt: number; updatedAt: number; }
+export type SelectionOperation = 'new' | 'add' | 'restrict' | 'exclude' | 'remove' | 'replace' | 'broaden';
+export interface SelectionContext { query: QueryPlan; operations: SelectionOperation[]; }
 export interface SearchIntent { kind: 'search' | 'refine'; query: QueryPlan; operation?: SelectionOperation; }
 export type GalleryAction = 'trash' | 'share' | 'favorite' | 'unfavorite' | 'save-selection';
 export interface ActionIntent { action: GalleryAction; selectionId?: string; requiresConfirmation: true; }
@@ -175,6 +176,10 @@ export const queryPlanSchema = z.strictObject({
       maxQuality: score.optional(),
       minBlur: score.optional(),
       minFileSize: z.number().int().nonnegative().optional(),
+      people: z.array(z.string().min(1)).optional(),
+      places: z.array(z.string().min(1)).optional(),
+      sceneLabels: z.array(z.string().min(1)).optional(),
+      source: z.string().min(1).optional(),
     })
     .refine(
       (filters) =>
@@ -189,6 +194,8 @@ export const queryPlanSchema = z.strictObject({
       favorites: z.boolean().default(true),
       albums: z.array(z.string()).optional(),
       importantPeople: z.boolean().optional(),
+      screenshots: z.boolean().optional(),
+      labels: z.array(z.string().min(1)).optional(),
     })
     .default({ favorites: true }),
   ranking: z
@@ -204,9 +211,11 @@ export const queryPlanSchema = z.strictObject({
 });
 export type QueryPlan = z.infer<typeof queryPlanSchema>;
 export type PhotoQueryPlan = QueryPlan;
-export const selectionOperationSchema = z.enum(['add', 'restrict', 'exclude', 'remove', 'replace', 'broaden']);
-export const selectionSchema = z.strictObject({ id: z.string().min(1), name: z.string().trim().min(1).max(120), assetIds: z.array(z.string().min(1)), query: queryPlanSchema.optional(), createdAt: timestamp, updatedAt: timestamp });
+export const selectionOperationSchema = z.enum(['new', 'add', 'restrict', 'exclude', 'remove', 'replace', 'broaden']);
 export const searchIntentSchema = z.strictObject({ kind: z.enum(['search', 'refine']), query: queryPlanSchema, operation: selectionOperationSchema.optional() });
+export const selectionContextSchema = z.strictObject({ query: queryPlanSchema, operations: z.array(selectionOperationSchema) });
+export const selectionSchema = z.strictObject({ id: z.string().min(1), name: z.string().trim().min(1).max(120), assetIds: z.array(z.string().min(1)), query: queryPlanSchema.optional(), context: selectionContextSchema.optional(), createdAt: timestamp, updatedAt: timestamp });
+export { createSelectionContext, reduceSelectionContext } from './selection-context';
 export const actionIntentSchema = z.strictObject({ action: z.enum(['trash', 'share', 'favorite', 'unfavorite', 'save-selection']), selectionId: z.string().min(1).optional(), requiresConfirmation: z.literal(true) });
 export type CleanupReason =
   | 'screenshot'

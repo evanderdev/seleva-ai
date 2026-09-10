@@ -18,6 +18,8 @@ export function buildPhotoQuery(input: QueryPlan, request: PageRequest) {
   const page = pageRequestSchema.parse(request);
   if (plan.exclusions.albums?.length || plan.exclusions.importantPeople)
     throw new Error('UNSUPPORTED_EXCLUSION');
+  if (plan.filters?.people?.length || plan.filters?.places?.length || plan.filters?.sceneLabels?.length || plan.filters?.source)
+    throw new Error('UNSUPPORTED_ENTITY_FILTER');
   const strategy = plan.ranking?.strategy;
   if (strategy === 'most-redundant' || strategy === 'least-important')
     throw new Error('UNSUPPORTED_RANKING');
@@ -37,6 +39,9 @@ export function buildPhotoQuery(input: QueryPlan, request: PageRequest) {
   };
   const filters = plan.filters;
   if (plan.exclusions.favorites) where.push('p.favorite = 0');
+  if (plan.exclusions.screenshots) where.push('COALESCE(a.is_screenshot, 0) = 0');
+  for (const label of plan.exclusions.labels ?? [])
+    add('NOT EXISTS (SELECT 1 FROM photo_labels l WHERE l.photo_id = p.id AND l.label = ?)', label);
   if (filters?.favorite !== undefined)
     add('p.favorite = ?', Number(filters.favorite));
   if (filters?.before !== undefined) add('p.created_at < ?', filters.before);

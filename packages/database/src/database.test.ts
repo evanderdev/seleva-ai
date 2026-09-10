@@ -121,7 +121,7 @@ it('migrates idempotently and preserves data', async () => {
   await migrate(db);
   expect((await repository.getSummary()).photos).toBe(1);
   expect(sqlite.prepare('PRAGMA user_version').get()).toEqual(
-      expect.objectContaining({ user_version: 3 }),
+      expect.objectContaining({ user_version: 4 }),
   );
 });
 it('paginates tied timestamps without duplicates and excludes favorites', async () => {

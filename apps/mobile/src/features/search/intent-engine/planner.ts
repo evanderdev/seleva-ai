@@ -8,6 +8,9 @@ export const planner: IntentPlanner = {
     if (intent.bestShot) notices.push('bestShotUnavailable');
     if (['organize', 'compare', 'keep'].includes(intent.action))
       notices.push('actionUnavailable');
+    const query = queryPlanSchema.parse(intent.query);
+    if (query.filters?.people?.length || query.filters?.places?.length || query.filters?.sceneLabels?.length || query.filters?.source)
+      notices.push('filterUnavailable');
     // Classification labels are not populated with these semantic categories yet.
     if (intent.concepts.length || notices.length) {
       return { status: 'unsupported', notices, requiresReview: true };
@@ -15,7 +18,6 @@ export const planner: IntentPlanner = {
     if (intent.cleanupCandidate) notices.push('cleanupRankingUnavailable');
     if (intent.freeSpace || intent.query.target?.minSpaceToRecover)
       notices.push('spaceTargetUnavailable');
-    const query = queryPlanSchema.parse(intent.query);
     const constrained = Object.values(query.filters ?? {}).some(
       (value) => value !== undefined,
     );
@@ -28,7 +30,11 @@ export const planner: IntentPlanner = {
     ) {
       return { status: 'unsupported', notices, requiresReview: true };
     }
-    // Only return queries. Selection and trash APIs are deliberately not dependencies.
-    return { status: 'ready', query, notices, requiresReview: true };
+    const action = intent.action === 'delete'
+      ? { action: 'trash' as const, requiresConfirmation: true as const }
+      : intent.action === 'favorite' || intent.action === 'unfavorite' || intent.action === 'share'
+        ? { action: intent.action, requiresConfirmation: true as const }
+        : undefined;
+    return { status: 'ready', query, action, notices, requiresReview: true };
   },
 };

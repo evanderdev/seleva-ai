@@ -50,6 +50,13 @@ export const dateParser: NaturalDateParser = {
       .replace(/\bhace\s+(.+?)\s+(dias?|semanas?|meses|anos?)\b/g, '$1 $2 ago');
     for (const [pattern, value] of translations)
       text = text.replace(pattern, value);
+    const explicitYear = /\b(before|after)\s+(\d{4})\b/.exec(text);
+    if (explicitYear) {
+      const yearStart = new Date(Number(explicitYear[2]), 0, 1).getTime();
+      return explicitYear[1] === 'before'
+        ? { before: yearStart, remaining: text.replace(explicitYear[0], '') }
+        : { after: new Date(Number(explicitYear[2]), 11, 31, 23, 59, 59, 999).getTime(), remaining: text.replace(explicitYear[0], '') };
+    }
     const calendar = /\b(last week|last month|last year|this year)\b/.exec(
       text,
     );

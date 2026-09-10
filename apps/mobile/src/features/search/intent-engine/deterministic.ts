@@ -6,6 +6,7 @@ import {
   type DeterministicIntentProvider,
   type SelevaIntent,
 } from './types';
+import { builtinMatchers, runMatcherRegistry } from './matchers';
 
 type Filter = NonNullable<QueryPlan['filters']>;
 const aliases: Array<[RegExp, Partial<Filter>]> = [
@@ -26,6 +27,8 @@ const aliases: Array<[RegExp, Partial<Filter>]> = [
     { minBlur: 0.55 },
   ],
   [/\b(large|big|grandes?|pesad\w*)\b/g, { minFileSize: 500 * 1024 ** 2 }],
+  [/\b(beach|praia|playa)\b/g, { labels: ['beach'] }],
+  [/\b(work|trabalho|trabajo)\b/g, { labels: ['work'] }],
 ];
 const concepts: Array<[RegExp, SelevaIntent['concepts'][number]]> = [
   [/\b(comprovantes?|bank receipts?)\b/g, 'bank_receipt'],
@@ -52,12 +55,18 @@ const actions: Array<[RegExp, SelevaIntent['action']]> = [
   [/\b(organize|organizar|organiza)\b/g, 'organize'],
   [/\b(compare|comparar|compara)\b/g, 'compare'],
 ];
+actions.push(
+  [/\b(unfavorite|desfavoritar|remover favorito)\b/g, 'unfavorite'],
+  [/\b(favorite|favoritar|marcar como favorita)\b/g, 'favorite'],
+  [/\b(share|compartilhar|compartir)\b/g, 'share'],
+);
 const fillers =
-  /\b(find|search|show|me|my|the|some|please|from|with|of|in|on|that|are|encontre|encontrar|procura|procure|buscar|busca|mostre|mostrar|mostra|quero|ver|ve|veja|minhas?|meus?|uns?|umas?|os|as|de|do|da|dos|das|na|no|em|com|por|favor|e|y|i|want|to|quiero|muestra|mostrar|mis|las|los|del|con|gallery|galeria|fotos|photos)\b/g;
+  /\b(find|search|show|me|my|the|some|please|from|with|of|in|on|that|are|refine|filter|continue|encontre|encontrar|procura|procure|buscar|busca|mostre|mostrar|mostra|quero|ver|ve|veja|minhas?|meus?|uns?|umas?|os|as|de|do|da|dos|das|na|no|em|com|por|favor|e|y|i|want|to|quiero|muestra|mostrar|mis|las|los|del|con|gallery|galeria|fotos|photos)\b/g;
 
 export const deterministicProvider: DeterministicIntentProvider = {
   async interpret(input, context) {
-    let text = fold(input.originalText);
+    let text = fold(input.canonicalText ?? input.originalText);
+    const matcherEvidence = runMatcherRegistry(builtinMatchers, { text }).flatMap((result) => result.evidence);
     const filters: Filter = {};
     const ocrTerms: string[] = [];
     text = text.replace(/["“]([^"”]+)["”]/g, (_, term: string) => {
@@ -76,6 +85,15 @@ export const deterministicProvider: DeterministicIntentProvider = {
     const ambiguous = /\b(not|nao|no|except|without|sem|sin|or|ou|o)\b/.test(
       text,
     );
+    const operation = /\b(without|except|excluding|sem|exceto|menos|sin)\b/.test(text)
+      ? 'exclude' as const
+      : /\b(remove|retire|remova|tirar)\b/.test(text) && /\b(from|da|do|de)\b/.test(text)
+        ? 'remove' as const
+        : /\b(also|tambem|também|ademas|plus|include)\b/.test(text)
+          ? 'broaden' as const
+          : /\b(refine|filter|filtro|continue|agora)\b/.test(text)
+            ? 'restrict' as const
+            : 'new' as const;
     let action: SelevaIntent['action'] = 'find';
     for (const [pattern, value] of actions) {
       if (text.match(pattern)) {
@@ -160,6 +178,7 @@ export const deterministicProvider: DeterministicIntentProvider = {
       cleanupCandidate,
       freeSpace: freeSpace || Boolean(target),
       destructive: action === 'delete',
+      operation,
     });
     const recognized =
       Object.keys(filters).length > 0 ||
@@ -174,6 +193,8 @@ export const deterministicProvider: DeterministicIntentProvider = {
       intent,
       confidence: unresolved ? 0.35 : shortOcr ? 0.85 : 0.96,
       unresolved,
+      residual,
+      evidence: matcherEvidence.map((matcher) => ({ matcher, text: matcher })),
     };
   },
 };
