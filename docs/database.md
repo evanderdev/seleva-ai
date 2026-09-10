@@ -35,7 +35,9 @@ os sinais de qualidade, conteúdo, hashes e OCR em tabelas próprias. Migration 
 tabelas agregadas e instala `photo_ocr_index`, alimentado exclusivamente por `photo_ocr_text`.
 As tabelas específicas são a única fonte de leitura e escrita; todos os writes acontecem na
 mesma transação do lote.
-Versão atual: 7. Versões usam PRAGMA user_version; cada atualização ocorre dentro de transação exclusiva.
+Migration 8 registra feedback local da decisão do usuário (`cleanup_feedback`) para aprendizado
+de ranking sem conteúdo visual. Versão atual: 8. Versões usam PRAGMA user_version; cada atualização
+ocorre dentro de transação exclusiva.
 Banco de versão futura é rejeitado. Triggers mantêm OCR sincronizado em insert/update/delete,
 inclusive deleção em cascata de assets.
 

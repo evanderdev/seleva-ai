@@ -514,6 +514,22 @@ export class PhotoRepository {
     );
   }
 
+  async recordCleanupFeedback(
+    photoId: string,
+    recommendation: 'keep' | 'trash',
+    decision: 'kept' | 'trashed',
+    createdAt = Date.now(),
+  ): Promise<void> {
+    await this.db.runAsync(
+      'INSERT INTO cleanup_feedback(photo_id,recommendation,decision,created_at) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM photos WHERE id=?)',
+      photoId,
+      recommendation,
+      decision,
+      createdAt,
+      photoId,
+    );
+  }
+
   async createScanJob(id: string, startedAt = Date.now()): Promise<ScanJob> {
     await this.db.runAsync(
       `INSERT INTO scan_jobs(id,processed,total,status,checkpoint,started_at,updated_at,error)

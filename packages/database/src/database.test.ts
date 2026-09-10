@@ -150,7 +150,7 @@ it('migrates idempotently and preserves data', async () => {
   await migrate(db);
   expect((await repository.getSummary()).photos).toBe(1);
   expect(sqlite.prepare('PRAGMA user_version').get()).toEqual(
-      expect.objectContaining({ user_version: 7 }),
+      expect.objectContaining({ user_version: 8 }),
   );
 });
 it('paginates tied timestamps without duplicates and excludes favorites', async () => {
@@ -524,6 +524,13 @@ it('invalidates old Android hashes and never groups them with the new algorithm'
   ).toEqual(['android:1:p']);
   await repository.rebuildClusters();
   expect((await repository.getInsights()).similarPhotos).toBe(0);
+});
+it('stores local cleanup feedback for future ranking signals', async () => {
+  await photo('candidate');
+  await repository.recordCleanupFeedback('candidate', 'trash', 'kept', 123);
+  expect(await db.getAllAsync<{ photo_id: string; recommendation: string; decision: string }>(
+    'SELECT photo_id,recommendation,decision FROM cleanup_feedback',
+  )).toEqual([{ photo_id: 'candidate', recommendation: 'trash', decision: 'kept' }]);
 });
 
 it('groups Android visual hashes within a bounded Hamming distance', async () => {

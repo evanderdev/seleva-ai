@@ -170,6 +170,11 @@ Cada capability deve ter provider real, disponibilidade explícita, persistênci
 - Garantir fluxo preview → seleção → confirmação explícita → API de lixeira do SO.
 - Registrar aprendizado local das decisões sem conteúdo visual ou prompts crus.
 
+### Incremento executado em 2026-09-10
+
+- Rankings `largest`, `worst-quality`, `most-redundant` e `least-important` usam `RankingEngine` SQL com cursor estável.
+- `cleanup_feedback` persiste a decisão keep/trash por asset para aprendizado local futuro; a revisão e a confirmação do SO continuam obrigatórias.
+
 ## Etapa 10 — validação final
 
 - Testes de registry, resolver, analysis composition, search composition, AND/OR/NOT, candidate sets, planner e SelectionContext.

@@ -202,6 +202,19 @@ INSERT INTO photo_ocr_index(photo_id, ocr_text)
   SELECT photo_id, ocr_text FROM photo_ocr_text;
 `,
   },
+  {
+    version: 8,
+    sql: `
+CREATE TABLE cleanup_feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+  recommendation TEXT NOT NULL CHECK(recommendation IN ('keep','trash')),
+  decision TEXT NOT NULL CHECK(decision IN ('kept','trashed')),
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX cleanup_feedback_photo ON cleanup_feedback(photo_id, created_at DESC);
+`,
+  },
 ] as const;
 
 export async function migrate(db: SqlDatabase): Promise<void> {
