@@ -8,7 +8,7 @@ function structuredExpression(value: { filters?: Record<string, unknown>; exclus
   const operators: Record<string, string> = { before: 'before', after: 'after', mediaTypes: 'in', ocrTerms: 'containsAny' };
   for (const [field, actual] of Object.entries(value.filters ?? {})) {
     if (actual === undefined) continue;
-    const capability = field === 'before' || field === 'after' ? 'query.date' : field === 'ocrTerms' ? 'text.ocr' : field === 'screenshot' ? 'content.screenshot' : field === 'document' ? 'content.document' : field === 'duplicate' ? 'duplicate.exact' : field === 'similar' ? 'similarity.perceptual' : field === 'minBlur' ? 'quality.visual' : 'metadata.core';
+    const capability = field === 'before' || field === 'after' ? 'query.date' : field === 'ocrTerms' ? 'text.ocr' : field === 'screenshot' ? 'content.screenshot' : field === 'document' ? 'content.document' : field === 'duplicate' ? 'duplicate.exact' : field === 'similar' ? 'similarity.perceptual' : field === 'hasFaces' ? 'people.face' : field === 'minBlur' ? 'quality.visual' : 'metadata.core';
     children.push(predicate(capability, operators[field] ?? 'eq', { field, value: actual } as SearchPredicate['value']));
   }
   for (const [field, actual] of Object.entries(value.exclusions ?? { favorites: true })) {
@@ -303,6 +303,20 @@ it('uses the explicit degraded document capability through local OCR', async () 
     { limit: 10 },
   );
   expect(result.assets.map((asset) => asset.id)).toEqual(['document']);
+});
+
+it('queries the face capability from persisted quality signals', async () => {
+  await photo('faces');
+  await photo('empty');
+  await repository.upsertAnalyses([
+    { photoId: 'faces', analysisVersion: 1, analyzedAt: 10, modelVersion: 'android-heuristic-2', faceCount: 2 },
+    { photoId: 'empty', analysisVersion: 1, analyzedAt: 10, modelVersion: 'android-heuristic-2', faceCount: 0 },
+  ]);
+  const result = await repository.query(
+    queryPlanSchema.parse({ filters: { hasFaces: true } }),
+    { limit: 10 },
+  );
+  expect(result.assets.map((asset) => asset.id)).toEqual(['faces']);
 });
 
 it('persists native analysis and builds duplicate clusters', async () => {

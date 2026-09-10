@@ -157,6 +157,11 @@ Somente depois das etapas 1–7:
 
 Cada capability deve ter provider real, disponibilidade explícita, persistência versionada, fallback documentado e testes de boundary. Não registrar mocks como suporte.
 
+### Incremento executado em 2026-09-10
+
+- `content.document` usa OCR local como provider heurístico degradado, com predicate e índice FTS próprios.
+- `people.face` usa `face_count` persistido pelo analyzer nativo e provider SQL dedicado, mantendo o filtro separado de qualidade visual.
+
 ## Etapa 9 — ranking, ações e seleção
 
 - Separar filtro de ranking para qualidade, recência, redundância, importância e best shot.

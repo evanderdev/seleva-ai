@@ -50,7 +50,7 @@ export class SqlCandidateIndex implements CandidateIndex {
     if (predicate.capability === 'content.document' && typeof value === 'boolean') return append(base, `${value ? '' : 'NOT '}EXISTS (SELECT 1 FROM photo_ocr_text ot WHERE ot.photo_id = p.id AND length(trim(ot.ocr_text)) > 0)`, []);
     if (predicate.capability === 'quality.visual' && field === 'maxQuality' && typeof value === 'number') return append(base, 'q.quality_score <= ?', [value]);
     if (predicate.capability === 'quality.visual' && field === 'minBlur' && typeof value === 'number') return append(base, 'q.blur_score >= ?', [value]);
-    if (predicate.capability === 'quality.visual' && field === 'hasFaces' && typeof value === 'boolean') return append(base, value ? 'q.face_count > 0' : 'q.face_count = 0', []);
+    if (predicate.capability === 'people.face' && field === 'hasFaces' && typeof value === 'boolean') return append(base, value ? 'q.face_count > 0' : 'q.face_count = 0', []);
     if (predicate.capability === 'text.ocr' && field === 'ocrTerms' && Array.isArray(value) && value.every(item => typeof item === 'string')) {
       const match = value.map(item => `"${item.replaceAll('"', '""')}"`).join(' AND ');
       return append(base, 'p.id IN (SELECT photo_id FROM photo_ocr_index WHERE photo_ocr_index MATCH ?)', [match]);
@@ -109,7 +109,7 @@ class SqlDocumentEngine extends SqlPredicateEngine {
 }
 
 export function createSqlCapabilityPlugins(index: SqlCandidateIndex): CapabilityPlugin[] {
-  const supported = new Set(['metadata.core', 'query.date', 'content.screenshot', 'content.document', 'quality.visual', 'text.ocr', 'duplicate.exact', 'similarity.perceptual']);
+  const supported = new Set(['metadata.core', 'query.date', 'content.screenshot', 'content.document', 'quality.visual', 'people.face', 'text.ocr', 'duplicate.exact', 'similarity.perceptual']);
   return capabilityManifests.filter(manifest => supported.has(manifest.id)).map(manifest => ({
     manifest: { ...manifest, functions: [...new Set([...manifest.functions, 'search' as const])], dependencies: [...manifest.dependencies], fallbackCapabilities: [...manifest.fallbackCapabilities] },
     searchEngines: [manifest.id === 'content.document'

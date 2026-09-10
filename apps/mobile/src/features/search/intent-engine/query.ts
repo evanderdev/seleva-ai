@@ -38,7 +38,9 @@ export function filtersToExpression(
               ? 'duplicate.exact'
               : field === 'similar'
                 ? 'similarity.perceptual'
-                : field === 'maxQuality' || field === 'minBlur' || field === 'hasFaces'
+                : field === 'hasFaces'
+                  ? 'people.face'
+                  : field === 'maxQuality' || field === 'minBlur'
                   ? 'quality.visual'
                   : 'metadata.core';
     children.push(predicate(capability, operators[field] ?? 'eq', jsonValue({ field, value })));
