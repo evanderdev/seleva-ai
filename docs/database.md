@@ -30,6 +30,10 @@ e busy timeout. Não contém cópias dos arquivos da galeria.
 Migration 1 cria photos, photo_analysis, photo_labels, photo_clusters,
 photo_cluster_members, scan_jobs, cleanup_history, user_preferences e photo_ocr FTS5.
 Migration 2 adiciona o hash de conteúdo usado para clusters de duplicatas exatas.
+Migration 5 registra o estado e o erro de cada capability por asset. Migration 6 materializa
+os sinais de qualidade, conteúdo, hashes e OCR em tabelas próprias e faz backfill da projeção
+agregada existente. `photo_analysis` permanece como projeção compatível durante a migração dos
+readers; todos os writes acontecem na mesma transação do lote.
 Versões usam PRAGMA user_version; cada atualização ocorre dentro de transação exclusiva.
 Banco de versão futura é rejeitado. Triggers mantêm OCR sincronizado em insert/update/delete,
 inclusive deleção em cascata de assets.
@@ -50,7 +54,7 @@ proteção de favoritas, binding de entradas hostis, ordenação e persistência
 
 ## Migrations
 
-The schema is version 3. Migration 3 adds `saved_selections` and
+The schema is version 6. Migration 3 adds `saved_selections` and
 `saved_selection_members`, which persist named selections without copying
 media. Members reference the native asset identifiers already stored in
 `photos`; deleting an asset cascades to saved selections. The selection query

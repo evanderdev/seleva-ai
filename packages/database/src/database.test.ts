@@ -122,7 +122,7 @@ it('migrates idempotently and preserves data', async () => {
   await migrate(db);
   expect((await repository.getSummary()).photos).toBe(1);
   expect(sqlite.prepare('PRAGMA user_version').get()).toEqual(
-      expect.objectContaining({ user_version: 5 }),
+      expect.objectContaining({ user_version: 6 }),
   );
 });
 it('paginates tied timestamps without duplicates and excludes favorites', async () => {
@@ -215,26 +215,48 @@ it('persists capability results and retries failed analyzers', async () => {
     analysisVersion: 1,
     modelVersion: 'android-heuristic-2',
     analyzedAt: 10,
+    blurScore: 0.8,
+    qualityScore: 0.2,
+    brightnessScore: 0.7,
+    isScreenshot: true,
+    perceptualHash: 'visual-hash',
+    contentHash: 'content-hash',
+    ocrText: 'invoice',
     capabilityResults: [
       { capabilityId: 'quality.visual', status: 'completed' },
-      { capabilityId: 'text.ocr', status: 'failed', error: 'OCR_FAILED' },
+      { capabilityId: 'text.ocr', status: 'completed' },
     ],
   }]);
   expect(await db.getAllAsync<{ capability_id: string; status: string; error: string | null }>(
     'SELECT capability_id,status,error FROM photo_analysis_capabilities ORDER BY capability_id',
   )).toEqual([
     { capability_id: 'quality.visual', status: 'completed', error: null },
-    { capability_id: 'text.ocr', status: 'failed', error: 'OCR_FAILED' },
+    { capability_id: 'text.ocr', status: 'completed', error: null },
   ]);
-  expect(await repository.getPendingAnalysisIds(['capability-photo'])).toEqual(['capability-photo']);
+  expect(await db.getAllAsync<{ blur_score: number; is_screenshot: number; perceptual_hash: string; content_hash: string; ocr_text: string }>(
+    `SELECT q.blur_score, c.is_screenshot, h.perceptual_hash, h.content_hash, o.ocr_text
+     FROM photo_quality_signals q
+     JOIN photo_content_signals c ON c.photo_id=q.photo_id
+     JOIN photo_hashes h ON h.photo_id=q.photo_id
+     JOIN photo_ocr_text o ON o.photo_id=q.photo_id
+     WHERE q.photo_id=?`,
+    'capability-photo',
+  )).toEqual([{
+    blur_score: 0.8,
+    is_screenshot: 1,
+    perceptual_hash: 'visual-hash',
+    content_hash: 'content-hash',
+    ocr_text: 'invoice',
+  }]);
+  expect(await repository.getPendingAnalysisIds(['capability-photo'])).toEqual([]);
   await repository.upsertAnalyses([{
     photoId: 'capability-photo',
     analysisVersion: 1,
     modelVersion: 'android-heuristic-2',
     analyzedAt: 20,
-    capabilityResults: [{ capabilityId: 'text.ocr', status: 'completed' }],
+    capabilityResults: [{ capabilityId: 'text.ocr', status: 'failed', error: 'OCR_FAILED' }],
   }]);
-  expect(await repository.getPendingAnalysisIds(['capability-photo'])).toEqual([]);
+  expect(await repository.getPendingAnalysisIds(['capability-photo'])).toEqual(['capability-photo']);
 });
 
 it('persists native analysis and builds duplicate clusters', async () => {

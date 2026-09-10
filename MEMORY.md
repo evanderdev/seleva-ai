@@ -68,7 +68,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 ## Estado Atual das Features
 
 - [x] Etapa inicial da migração da busca (2026-09-10): o caminho SQLite real usa registry, resolver, composition e candidate sets SQL para as capabilities implementadas; lint, typecheck e 92 testes passaram. Ranking de tamanho/qualidade possui provider SQL.
-- [x] Primeira migração da Analysis Composition (2026-09-10): o scanner Android registra adapters nativos para os estágios fast/deep, resolve pendências por cache e despacha uma seleção única por lote antes do ACK. A execução de pixels permanece nativa; persistência, versões e retomada continuam no protocolo existente. A migration 5 grava estado e erro por capability, e o cache reabre capabilities falhas para retry. Typecheck, lint e 94 testes passaram; compilação Kotlin do módulo nativo passou.
+- [x] Primeira migração da Analysis Composition (2026-09-10): o scanner Android registra adapters nativos para os estágios fast/deep, resolve pendências por cache e despacha uma seleção única por lote antes do ACK. A execução de pixels permanece nativa; persistência, versões e retomada continuam no protocolo existente. As migrations 5 e 6 gravam estado/erro por capability e sinais específicos de qualidade, conteúdo, hashes e OCR; o cache reabre capabilities falhas para retry. Typecheck, lint e 94 testes passaram; compilação Kotlin do módulo nativo passou.
 
 - [x] Refatoração da engine modular (2026-09-10): `SearchExpression`, `SearchRequest`, `CapabilityRegistry`, `CapabilityResolver`, Analysis/Search Composition, analyzers/query processors/search engines/rankers e catálogo inicial de capabilities implementados. Parser, SelectionContext, SQLite e seleções salvas usam a AST; 92 testes, lint e typecheck passam. Providers reais de semantic visual, pessoas e labels continuam planejados e são reportados como indisponíveis.
 
@@ -130,7 +130,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 `packages/core`: PhotoAsset, PhotoAnalysis, PhotoQuality, PhotoCluster, ScanJob,
 ScanProgressEvent, QueryPlan/PhotoQueryPlan, PhotoQuery, CleanupCandidate, PhotoEngine e IntentProvider.
-`packages/database`: schema version 5, foreign keys, WAL, migration transacional e FTS5
+`packages/database`: schema version 6, foreign keys, WAL, migration transacional e FTS5
 sincronizado por triggers. Consultas por data/tipo/tamanho/qualidade/screenshots/OCR/labels/clusters.
 O writer recebe lotes nativos e mantém `scan_jobs`; `getSummary` informa contagens e bytes conhecidos.
 `packages/photo-engine`: adapters de capacidades/permissões, leitura paginada, thumbnails, scanner e lixeira.

@@ -104,6 +104,76 @@ CREATE TABLE photo_analysis_capabilities (
 CREATE INDEX photo_analysis_capabilities_status ON photo_analysis_capabilities(status, capability_id, photo_id);
 `,
   },
+  {
+    version: 6,
+    sql: `
+CREATE TABLE photo_quality_signals (
+  photo_id TEXT PRIMARY KEY NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+  blur_score REAL CHECK(blur_score BETWEEN 0 AND 1),
+  quality_score REAL CHECK(quality_score BETWEEN 0 AND 1),
+  brightness_score REAL CHECK(brightness_score BETWEEN 0 AND 1),
+  analysis_version INTEGER NOT NULL,
+  model_version TEXT,
+  analyzed_at INTEGER NOT NULL
+);
+CREATE TABLE photo_content_signals (
+  photo_id TEXT PRIMARY KEY NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+  is_screenshot INTEGER CHECK(is_screenshot IN (0,1)),
+  is_document INTEGER CHECK(is_document IN (0,1)),
+  is_meme INTEGER CHECK(is_meme IN (0,1)),
+  analysis_version INTEGER NOT NULL,
+  model_version TEXT,
+  analyzed_at INTEGER NOT NULL
+);
+CREATE TABLE photo_hashes (
+  photo_id TEXT PRIMARY KEY NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+  perceptual_hash TEXT,
+  content_hash TEXT,
+  analysis_version INTEGER NOT NULL,
+  model_version TEXT,
+  analyzed_at INTEGER NOT NULL
+);
+CREATE TABLE photo_ocr_text (
+  photo_id TEXT PRIMARY KEY NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+  ocr_text TEXT NOT NULL,
+  analysis_version INTEGER NOT NULL,
+  model_version TEXT,
+  analyzed_at INTEGER NOT NULL
+);
+CREATE INDEX photo_hashes_content ON photo_hashes(content_hash);
+CREATE INDEX photo_hashes_perceptual ON photo_hashes(perceptual_hash);
+INSERT INTO photo_quality_signals(
+  photo_id, blur_score, quality_score, brightness_score,
+  analysis_version, model_version, analyzed_at
+)
+SELECT photo_id, blur_score, quality_score, brightness_score,
+  analysis_version, model_version, analyzed_at
+FROM photo_analysis
+WHERE blur_score IS NOT NULL OR quality_score IS NOT NULL OR brightness_score IS NOT NULL;
+INSERT INTO photo_content_signals(
+  photo_id, is_screenshot, is_document, is_meme,
+  analysis_version, model_version, analyzed_at
+)
+SELECT photo_id, is_screenshot, is_document, is_meme,
+  analysis_version, model_version, analyzed_at
+FROM photo_analysis
+WHERE is_screenshot IS NOT NULL OR is_document IS NOT NULL OR is_meme IS NOT NULL;
+INSERT INTO photo_hashes(
+  photo_id, perceptual_hash, content_hash,
+  analysis_version, model_version, analyzed_at
+)
+SELECT photo_id, perceptual_hash, content_hash,
+  analysis_version, model_version, analyzed_at
+FROM photo_analysis
+WHERE perceptual_hash IS NOT NULL OR content_hash IS NOT NULL;
+INSERT INTO photo_ocr_text(
+  photo_id, ocr_text, analysis_version, model_version, analyzed_at
+)
+SELECT photo_id, COALESCE(ocr_text, ''), analysis_version, model_version, analyzed_at
+FROM photo_analysis
+WHERE ocr_text IS NOT NULL;
+`,
+  },
 ] as const;
 
 export async function migrate(db: SqlDatabase): Promise<void> {

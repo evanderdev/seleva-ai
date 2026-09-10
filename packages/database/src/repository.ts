@@ -301,6 +301,14 @@ export class PhotoRepository {
     if (analyses.length === 0) return;
     await this.db.withExclusiveTransactionAsync(async (tx) => {
       for (const analysis of analyses) {
+        const completedCapabilities = new Set(
+          (analysis.capabilityResults ?? [])
+            .filter((result) => result.status === 'completed')
+            .map((result) => result.capabilityId),
+        );
+        const ocrText = completedCapabilities.has('text.ocr')
+          ? analysis.ocrText ?? ''
+          : analysis.ocrText ?? null;
         await tx.runAsync(
           `INSERT INTO photo_analysis(
             photo_id, blur_score, quality_score, brightness_score, face_count,
@@ -308,11 +316,16 @@ export class PhotoRepository {
             content_hash, analysis_version, model_version, analyzed_at
           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(photo_id) DO UPDATE SET
-            blur_score=excluded.blur_score, quality_score=excluded.quality_score,
-            brightness_score=excluded.brightness_score, face_count=excluded.face_count,
-            ocr_text=excluded.ocr_text, is_screenshot=excluded.is_screenshot,
-            is_document=excluded.is_document, is_meme=excluded.is_meme,
-            perceptual_hash=excluded.perceptual_hash, content_hash=excluded.content_hash,
+            blur_score=COALESCE(excluded.blur_score, photo_analysis.blur_score),
+            quality_score=COALESCE(excluded.quality_score, photo_analysis.quality_score),
+            brightness_score=COALESCE(excluded.brightness_score, photo_analysis.brightness_score),
+            face_count=COALESCE(excluded.face_count, photo_analysis.face_count),
+            ocr_text=COALESCE(excluded.ocr_text, photo_analysis.ocr_text),
+            is_screenshot=COALESCE(excluded.is_screenshot, photo_analysis.is_screenshot),
+            is_document=COALESCE(excluded.is_document, photo_analysis.is_document),
+            is_meme=COALESCE(excluded.is_meme, photo_analysis.is_meme),
+            perceptual_hash=COALESCE(excluded.perceptual_hash, photo_analysis.perceptual_hash),
+            content_hash=COALESCE(excluded.content_hash, photo_analysis.content_hash),
             analysis_version=excluded.analysis_version, model_version=excluded.model_version,
             analyzed_at=excluded.analyzed_at`,
           analysis.photoId,
@@ -320,7 +333,7 @@ export class PhotoRepository {
           analysis.qualityScore ?? null,
           analysis.brightnessScore ?? null,
           analysis.faceCount ?? null,
-          analysis.ocrText ?? null,
+          ocrText,
           analysis.isScreenshot === undefined
             ? null
             : Number(analysis.isScreenshot),
@@ -351,6 +364,90 @@ export class PhotoRepository {
             analysis.modelVersion ?? null,
             analysis.analyzedAt,
             result.error ?? null,
+          );
+        }
+        if (
+          analysis.blurScore !== undefined ||
+          analysis.qualityScore !== undefined ||
+          analysis.brightnessScore !== undefined
+        ) {
+          await tx.runAsync(
+            `INSERT INTO photo_quality_signals(
+              photo_id, blur_score, quality_score, brightness_score,
+              analysis_version, model_version, analyzed_at
+            ) VALUES(?,?,?,?,?,?,?)
+            ON CONFLICT(photo_id) DO UPDATE SET
+              blur_score=COALESCE(excluded.blur_score, photo_quality_signals.blur_score),
+              quality_score=COALESCE(excluded.quality_score, photo_quality_signals.quality_score),
+              brightness_score=COALESCE(excluded.brightness_score, photo_quality_signals.brightness_score),
+              analysis_version=excluded.analysis_version, model_version=excluded.model_version,
+              analyzed_at=excluded.analyzed_at`,
+            analysis.photoId,
+            analysis.blurScore ?? null,
+            analysis.qualityScore ?? null,
+            analysis.brightnessScore ?? null,
+            analysis.analysisVersion,
+            analysis.modelVersion ?? null,
+            analysis.analyzedAt,
+          );
+        }
+        if (
+          analysis.isScreenshot !== undefined ||
+          analysis.isDocument !== undefined ||
+          analysis.isMeme !== undefined
+        ) {
+          await tx.runAsync(
+            `INSERT INTO photo_content_signals(
+              photo_id, is_screenshot, is_document, is_meme,
+              analysis_version, model_version, analyzed_at
+            ) VALUES(?,?,?,?,?,?,?)
+            ON CONFLICT(photo_id) DO UPDATE SET
+              is_screenshot=COALESCE(excluded.is_screenshot, photo_content_signals.is_screenshot),
+              is_document=COALESCE(excluded.is_document, photo_content_signals.is_document),
+              is_meme=COALESCE(excluded.is_meme, photo_content_signals.is_meme),
+              analysis_version=excluded.analysis_version, model_version=excluded.model_version,
+              analyzed_at=excluded.analyzed_at`,
+            analysis.photoId,
+            analysis.isScreenshot === undefined ? null : Number(analysis.isScreenshot),
+            analysis.isDocument === undefined ? null : Number(analysis.isDocument),
+            analysis.isMeme === undefined ? null : Number(analysis.isMeme),
+            analysis.analysisVersion,
+            analysis.modelVersion ?? null,
+            analysis.analyzedAt,
+          );
+        }
+        if (analysis.perceptualHash !== undefined || analysis.contentHash !== undefined) {
+          await tx.runAsync(
+            `INSERT INTO photo_hashes(
+              photo_id, perceptual_hash, content_hash,
+              analysis_version, model_version, analyzed_at
+            ) VALUES(?,?,?,?,?,?)
+            ON CONFLICT(photo_id) DO UPDATE SET
+              perceptual_hash=COALESCE(excluded.perceptual_hash, photo_hashes.perceptual_hash),
+              content_hash=COALESCE(excluded.content_hash, photo_hashes.content_hash),
+              analysis_version=excluded.analysis_version, model_version=excluded.model_version,
+              analyzed_at=excluded.analyzed_at`,
+            analysis.photoId,
+            analysis.perceptualHash ?? null,
+            analysis.contentHash ?? null,
+            analysis.analysisVersion,
+            analysis.modelVersion ?? null,
+            analysis.analyzedAt,
+          );
+        }
+        if (completedCapabilities.has('text.ocr') || analysis.ocrText !== undefined) {
+          await tx.runAsync(
+            `INSERT INTO photo_ocr_text(
+              photo_id, ocr_text, analysis_version, model_version, analyzed_at
+            ) VALUES(?,?,?,?,?)
+            ON CONFLICT(photo_id) DO UPDATE SET
+              ocr_text=excluded.ocr_text, analysis_version=excluded.analysis_version,
+              model_version=excluded.model_version, analyzed_at=excluded.analyzed_at`,
+            analysis.photoId,
+            analysis.ocrText ?? '',
+            analysis.analysisVersion,
+            analysis.modelVersion ?? null,
+            analysis.analyzedAt,
           );
         }
       }
