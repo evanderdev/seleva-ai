@@ -155,3 +155,10 @@ O APK anterior falhava antes do JavaScript porque `expo.modules.ExpoModulesPacka
 - Buscar e Limpar reutilizam a galeria paginada; seleção reinicia ao trocar página/filtro ou sair da tela. Ainda não existe plano de limpeza, ranking ou estimativa de espaço recuperável.
 - Thumbnails ficam em cache nativo de até 200 arquivos/~24 MB; iOS não baixa conteúdo do iCloud.
 - Não usar esta API em loop para implementar scanner JS; indexação deve permanecer nativa.
+
+## Validacao Android da Fase 1 (10/09/2026)
+
+- APK debug compilado e instalado no Samsung SM-S918B conectado via adb; a Home carregou dados indexados de screenshots, fotos parecidas e fotos borradas.
+- O fluxo de selecoes salvas usa SQLite migration 3 (`saved_selections` e `saved_selection_members`) e permite salvar/reabrir a selecao atual.
+- Nao houve crash fatal na observacao do aparelho. O Android exibiu alerta de alinhamento ELF para paginas de 16 KB em bibliotecas nativas; validar dependencias antes do release.
+- Incremental/background automatico, similaridade aproximada e validacao completa do trash no hardware continuam pendentes da Fase 1.
