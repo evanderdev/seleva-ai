@@ -39,6 +39,12 @@ export const placeSchema = z.strictObject({ id: z.string().min(1), name: z.strin
 export const labelSchema = z.strictObject({ name: z.string().min(1), confidence: boundedConfidence.optional() });
 export const ocrTextSchema = z.strictObject({ text: z.string(), language: z.string().min(1).optional(), confidence: boundedConfidence.optional() });
 export const qualitySignalSchema = z.strictObject({ kind: z.enum(['blur', 'brightness', 'contrast', 'face', 'resolution', 'noise', 'composition']), score: boundedConfidence });
+export const analysisCapabilityResultSchema = z.strictObject({
+  capabilityId: z.string().regex(/^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9-]*)+$/),
+  status: z.enum(['completed', 'failed']),
+  error: z.string().min(1).optional(),
+});
+export type AnalysisCapabilityResult = z.infer<typeof analysisCapabilityResultSchema>;
 
 export interface PhotoAnalysis {
   photoId: string;
@@ -55,6 +61,7 @@ export interface PhotoAnalysis {
   isMeme?: boolean;
   perceptualHash?: string;
   contentHash?: string;
+  capabilityResults?: AnalysisCapabilityResult[];
 }
 
 export const photoAnalysisSchema = z.strictObject({
@@ -72,6 +79,7 @@ export const photoAnalysisSchema = z.strictObject({
   isMeme: z.boolean().optional(),
   perceptualHash: z.string().min(1).optional(),
   contentHash: z.string().min(1).optional(),
+  capabilityResults: z.array(analysisCapabilityResultSchema).max(15).optional(),
 });
 
 export interface PhotoQuality {

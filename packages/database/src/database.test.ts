@@ -122,7 +122,7 @@ it('migrates idempotently and preserves data', async () => {
   await migrate(db);
   expect((await repository.getSummary()).photos).toBe(1);
   expect(sqlite.prepare('PRAGMA user_version').get()).toEqual(
-      expect.objectContaining({ user_version: 4 }),
+      expect.objectContaining({ user_version: 5 }),
   );
 });
 it('paginates tied timestamps without duplicates and excludes favorites', async () => {
@@ -206,6 +206,35 @@ it('includes exact-only and visual copies in similar photos without repeating as
     { limit: 10 },
   );
   expect(excluded.assets.map((asset) => asset.id)).toEqual(['unique']);
+});
+
+it('persists capability results and retries failed analyzers', async () => {
+  await photo('capability-photo');
+  await repository.upsertAnalyses([{
+    photoId: 'capability-photo',
+    analysisVersion: 1,
+    modelVersion: 'android-heuristic-2',
+    analyzedAt: 10,
+    capabilityResults: [
+      { capabilityId: 'quality.visual', status: 'completed' },
+      { capabilityId: 'text.ocr', status: 'failed', error: 'OCR_FAILED' },
+    ],
+  }]);
+  expect(await db.getAllAsync<{ capability_id: string; status: string; error: string | null }>(
+    'SELECT capability_id,status,error FROM photo_analysis_capabilities ORDER BY capability_id',
+  )).toEqual([
+    { capability_id: 'quality.visual', status: 'completed', error: null },
+    { capability_id: 'text.ocr', status: 'failed', error: 'OCR_FAILED' },
+  ]);
+  expect(await repository.getPendingAnalysisIds(['capability-photo'])).toEqual(['capability-photo']);
+  await repository.upsertAnalyses([{
+    photoId: 'capability-photo',
+    analysisVersion: 1,
+    modelVersion: 'android-heuristic-2',
+    analyzedAt: 20,
+    capabilityResults: [{ capabilityId: 'text.ocr', status: 'completed' }],
+  }]);
+  expect(await repository.getPendingAnalysisIds(['capability-photo'])).toEqual([]);
 });
 
 it('persists native analysis and builds duplicate clusters', async () => {

@@ -54,7 +54,11 @@ function pendingForStage(fastOnly = false): string {
   const fast =
     "CASE WHEN p.id LIKE 'ios:%' THEN 'ios-fast-1' ELSE 'android-fast-2' END";
   return `(a.photo_id IS NULL OR a.analyzed_at < COALESCE(p.modified_at,0)
-    OR a.analysis_version != 1 OR COALESCE(a.model_version,'') NOT IN (${complete}${fastOnly ? `,${fast}` : ''}))`;
+    OR a.analysis_version != 1 OR COALESCE(a.model_version,'') NOT IN (${complete}${fastOnly ? `,${fast}` : ''})
+    OR EXISTS (
+      SELECT 1 FROM photo_analysis_capabilities pac
+      WHERE pac.photo_id = p.id AND pac.status = 'failed'
+    ))`;
 }
 const pendingAnalysis = pendingForStage();
 
@@ -330,6 +334,25 @@ export class PhotoRepository {
           analysis.modelVersion ?? null,
           analysis.analyzedAt,
         );
+        for (const result of analysis.capabilityResults ?? []) {
+          await tx.runAsync(
+            `INSERT INTO photo_analysis_capabilities(
+              photo_id, capability_id, status, analysis_version,
+              model_version, analyzed_at, error
+            ) VALUES(?,?,?,?,?,?,?)
+            ON CONFLICT(photo_id, capability_id) DO UPDATE SET
+              status=excluded.status, analysis_version=excluded.analysis_version,
+              model_version=excluded.model_version, analyzed_at=excluded.analyzed_at,
+              error=excluded.error`,
+            analysis.photoId,
+            result.capabilityId,
+            result.status,
+            analysis.analysisVersion,
+            analysis.modelVersion ?? null,
+            analysis.analyzedAt,
+            result.error ?? null,
+          );
+        }
       }
     });
   }

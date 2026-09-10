@@ -88,6 +88,22 @@ CREATE INDEX saved_selection_members_photo ON saved_selection_members(photo_id);
     version: 4,
     sql: `ALTER TABLE saved_selections ADD COLUMN context_json TEXT;`,
   },
+  {
+    version: 5,
+    sql: `
+CREATE TABLE photo_analysis_capabilities (
+  photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+  capability_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('completed','failed')),
+  analysis_version INTEGER NOT NULL,
+  model_version TEXT,
+  analyzed_at INTEGER NOT NULL,
+  error TEXT,
+  PRIMARY KEY(photo_id, capability_id)
+);
+CREATE INDEX photo_analysis_capabilities_status ON photo_analysis_capabilities(status, capability_id, photo_id);
+`,
+  },
 ] as const;
 
 export async function migrate(db: SqlDatabase): Promise<void> {

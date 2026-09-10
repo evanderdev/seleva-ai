@@ -56,13 +56,30 @@ internal class PhotoAnalyzer(private val context: Context) {
       if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
       assetId,
     )
-    val bitmap = profile.measure("thumbnail") { if (Build.VERSION.SDK_INT >= 29) {
-      context.contentResolver.loadThumbnail(uri, Size(224, 224), null)
-    } else if (video) {
-      MediaStore.Video.Thumbnails.getThumbnail(context.contentResolver, assetId, MediaStore.Video.Thumbnails.MINI_KIND, null)
-    } else {
-      MediaStore.Images.Thumbnails.getThumbnail(context.contentResolver, assetId, MediaStore.Images.Thumbnails.MINI_KIND, null)
+    val bitmap = try {
+      profile.measure("thumbnail") { if (Build.VERSION.SDK_INT >= 29) {
+        context.contentResolver.loadThumbnail(uri, Size(224, 224), null)
+      } else if (video) {
+        MediaStore.Video.Thumbnails.getThumbnail(context.contentResolver, assetId, MediaStore.Video.Thumbnails.MINI_KIND, null)
+      } else {
+        MediaStore.Images.Thumbnails.getThumbnail(context.contentResolver, assetId, MediaStore.Images.Thumbnails.MINI_KIND, null)
+      }
+      }
+    } catch (error: SecurityException) { throw error
+    } catch (_: Exception) { profile.count("failed"); null }
+    val completed = linkedSetOf<String>()
+    val failures = mutableListOf<Map<String, Any>>()
+    val expected = if (fastOnly) listOf(
+      "content.screenshot", "quality.visual", "similarity.perceptual"
+    ) else listOf(
+      "content.screenshot", "quality.visual", "similarity.perceptual", "duplicate.exact", "text.ocr"
+    )
+    fun failed(capabilityId: String, error: String) {
+      if (capabilityId !in completed && failures.none { it["capabilityId"] == capabilityId })
+        failures += mapOf("capabilityId" to capabilityId, "status" to "failed", "error" to error)
     }
+    fun completed(capabilityId: String) {
+      if (failures.none { it["capabilityId"] == capabilityId }) completed += capabilityId
     }
     val analysis = mutableMapOf<String, Any>(
       "photoId" to id,
@@ -70,22 +87,56 @@ internal class PhotoAnalyzer(private val context: Context) {
       "modelVersion" to if (fastOnly) "android-fast-2" else "android-heuristic-2",
       "analyzedAt" to System.currentTimeMillis(),
     )
-    if (bitmap == null) { profile.count("unavailable"); throw java.io.FileNotFoundException() }
-    if (bitmap != null) {
+    if (bitmap == null) {
+      profile.count("unavailable")
+      failed("quality.visual", "THUMBNAIL_UNAVAILABLE")
+      failed("similarity.perceptual", "THUMBNAIL_UNAVAILABLE")
+    } else {
       try {
         val blur = profile.measure("blur") { blurScore(bitmap) }
         analysis["blurScore"] = blur
         analysis["qualityScore"] = 1.0 - blur
         analysis["brightnessScore"] = profile.measure("brightness") { brightnessScore(bitmap) }
+        completed("quality.visual")
+      } catch (error: SecurityException) { throw error
+      } catch (_: Exception) { profile.count("failed"); failed("quality.visual", "QUALITY_FAILED") }
+      try {
         analysis["perceptualHash"] = profile.measure("visualHash") { perceptualHash(bitmap) }
-        if (!video && recognizer != null) {
+        completed("similarity.perceptual")
+      } catch (error: SecurityException) { throw error
+      } catch (_: Exception) { profile.count("failed"); failed("similarity.perceptual", "VISUAL_HASH_FAILED") }
+      if (!video && !fastOnly && recognizer != null) {
+        try {
           val text = profile.measure("ocr") { Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap, 0))).text }
           if (text.isNotBlank()) analysis["ocrText"] = text.take(10000)
-        }
-      } finally { bitmap.recycle() }
+          completed("text.ocr")
+        } catch (error: SecurityException) { throw error
+        } catch (_: Exception) { profile.count("failed"); failed("text.ocr", "OCR_FAILED") }
+      } else if (!fastOnly) {
+        // OCR is not applicable to videos; record that the capability was handled.
+        completed("text.ocr")
+      }
+      try { bitmap.recycle() } catch (_: Exception) { /* release is best effort */ }
     }
-    if (!video && !fastOnly) analysis["contentHash"] = profile.measure("contentHash") { contentHash(uri) }
-    analysis["isScreenshot"] = isScreenshot(uri)
+    try {
+      analysis["isScreenshot"] = isScreenshot(uri)
+      completed("content.screenshot")
+    } catch (error: SecurityException) { throw error
+    } catch (_: Exception) { profile.count("failed"); failed("content.screenshot", "SCREENSHOT_FAILED") }
+    if (!fastOnly) {
+      if (!video) {
+        try {
+          analysis["contentHash"] = profile.measure("contentHash") { contentHash(uri) }
+          completed("duplicate.exact")
+        } catch (error: SecurityException) { throw error
+        } catch (_: Exception) { profile.count("failed"); failed("duplicate.exact", "CONTENT_HASH_FAILED") }
+      } else {
+        completed("duplicate.exact")
+      }
+    }
+    expected.filter { capabilityId -> capabilityId !in completed && failures.none { it["capabilityId"] == capabilityId } }
+      .forEach { capabilityId -> failed(capabilityId, "NOT_PROCESSED") }
+    analysis["capabilityResults"] = completed.map { mapOf("capabilityId" to it, "status" to "completed") } + failures
     return analysis
   }
 
