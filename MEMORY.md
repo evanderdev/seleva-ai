@@ -169,3 +169,20 @@ O APK anterior falhava antes do JavaScript porque `expo.modules.ExpoModulesPacka
 - `PhotoRepository.rebuildClusters` agora cria grupos `similar` para hashes Android dentro de distância de Hamming <= 8 em buckets de quatro nibbles, sem carregar a biblioteca inteira no JavaScript. O teste SQLite cobre o agrupamento aproximado.
 - O plugin `withAndroid16kPackaging` configura `expo.useLegacyPackaging=true` durante o prebuild para empacotar bibliotecas nativas de forma compatível. APK recompilado, instalado e iniciado no Samsung SM-S918B sem alerta 16 KB nesta rodada.
 - Typecheck, lint e 83 testes passaram. Ação de trash foi mantida exclusivamente reversível via confirmação do sistema; não foi automatizada para evitar alterar fotos reais durante a validação.
+
+## Verificacao dos refinamentos do Notion (10/09/2026)
+
+- O contrato de SelectionOperation foi alinhado ao refinamento: o nome canônico de ampliar contexto é `broaden` (não `expand`), com teste de aceitação e rejeição do alias antigo.
+- O restante do documento está factual: Selection Context cumulativo, pessoas/lugares/objetos, favoritar e compartilhar seguem pendentes; OCR, lixeira, seleções salvas e similaridade Android permanecem nos níveis parciais/implementados descritos.
+
+## Correção do erro Android no Intent Engine (10/09/2026)
+
+- O Development Build no SM-S918B não expõe `NativeModules.Onnxruntime`; o import lazy de `onnxruntime-react-native` tentava executar `Module.install()` com módulo nulo e mostrava `Cannot read property 'install' of null`.
+- `apps/mobile/src/features/search/intent-engine/mobile.ts` agora verifica a capability nativa antes do import do ONNX. Quando ausente, o engine semântico falha de forma controlada e o planner determinístico permanece disponível.
+- Typecheck, lint e 83 testes passaram. Após recarregar no aparelho, a Home e o comando `clean screenshots` abriram Resultados sem tela vermelha ou erro fatal no logcat. ONNX semântico continua opcional neste build.
+
+## Seleções salvas na Home (10/09/2026)
+
+- Seleções salvas agora aparecem na Home, no mesmo grid das categorias, com nome e quantidade de itens.
+- A navegação envia somente o `selectionId`; a página de resultados recupera a seleção pelo SQLite e pagina seus membros em blocos de 60.
+- A seleção salva continua podendo ser revisada e explicitamente enviada à lixeira. Ao editar ou limpar o filtro, o fluxo volta para uma consulta normal.

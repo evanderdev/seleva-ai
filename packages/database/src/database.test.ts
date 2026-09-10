@@ -88,6 +88,13 @@ it('persists saved selections and removes duplicate asset ids', async () => {
   expect((await repository.getSelections())[0]).toMatchObject({
     id: saved.id, name: 'Trip', assetIds: ['a', 'b'],
   });
+  expect(await repository.getSelection(saved.id)).toMatchObject({
+    id: saved.id, name: 'Trip', assetIds: ['a', 'b'],
+  });
+  const firstPage = await repository.getSelectionPage(saved.id, { limit: 1 });
+  expect(firstPage.assets).toHaveLength(1);
+  expect(firstPage.nextCursor).toBe('1');
+  expect((await repository.getSelectionPage(saved.id, { limit: 1, cursor: '1' })).assets).toHaveLength(1);
   await expect(repository.saveSelection(' ', ['a'])).rejects.toThrow('INVALID_SELECTION_NAME');
   await expect(repository.saveSelection('Empty', [])).rejects.toThrow('EMPTY_SELECTION');
 });

@@ -34,7 +34,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { usePromptInterpreter } from '../features/search/usePromptInterpreter';
 import { LibraryStatus } from '../features/library/LibraryStatus';
 import { usePhotoRepository } from '../services/database';
-import type { QueryPlan, Selection } from '@seleva/core';
+import type { QueryPlan } from '@seleva/core';
 import { LibraryGridItem } from '../features/library/components/LibraryGridItem';
 import { Thumbnail } from '../features/library/components/Thumbnail';
 
@@ -50,6 +50,7 @@ export function LibraryScreen({
   initialOcrTerms,
   initialPrompt = '',
   initialQuery,
+  initialSelectionId,
   initialQueryInvalid = false,
   initialIntentNotice = false,
 }: {
@@ -63,6 +64,7 @@ export function LibraryScreen({
   initialOcrTerms?: string[];
   initialPrompt?: string;
   initialQuery?: QueryPlan;
+  initialSelectionId?: string;
   initialQueryInvalid?: boolean;
   initialIntentNotice?: boolean;
 }) {
@@ -84,7 +86,6 @@ export function LibraryScreen({
   );
   const [preview, setPreview] = useState<LibraryPage['assets'][number]>();
   const [selected, setSelected] = useState<string[]>([]);
-  const [savedSelections, setSavedSelections] = useState<Selection[]>([]);
   const [saveSelectionModal, setSaveSelectionModal] = useState(false);
   const [selectionName, setSelectionName] = useState('');
   const [savingSelection, setSavingSelection] = useState(false);
@@ -98,6 +99,7 @@ export function LibraryScreen({
   const { interpret, interpreting, intentError, clearIntentError } =
     usePromptInterpreter();
   const [intentQuery, setIntentQuery] = useState(initialQuery);
+  const [selectionId, setSelectionId] = useState(initialSelectionId);
   const [queryInvalid, setQueryInvalid] = useState(initialQueryInvalid);
   const [intentNotice, setIntentNotice] = useState(initialIntentNotice);
   const trashInFlight = useRef(false);
@@ -106,23 +108,11 @@ export function LibraryScreen({
     if (!selectionName.trim() || !selected.length || savingSelection) return;
     setSavingSelection(true);
     try {
-      const saved = await repository.saveSelection(selectionName, selected, intentQuery);
-      setSavedSelections((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      await repository.saveSelection(selectionName, selected, intentQuery);
       setSaveSelectionModal(false);
       setSelectionName('');
     } finally {
       setSavingSelection(false);
-    }
-  }
-  async function openSavedSelection(selection: Selection) {
-    setBusy(true);
-    try {
-      setPage(await repository.getAssetsByIds(selection.assetIds));
-      setSelected(selection.assetIds);
-      setPrompt(selection.name);
-      setIntentQuery(selection.query);
-    } finally {
-      setBusy(false);
     }
   }
   function editSearch() {
@@ -132,6 +122,7 @@ export function LibraryScreen({
   async function applySearch() {
     const result = await interpret(draft);
     if (!result) return;
+    setSelectionId(undefined);
     setCategory('all');
     setBefore(undefined);
     setMinFileSize(undefined);
@@ -147,6 +138,7 @@ export function LibraryScreen({
     setEditing(false);
   }
   function clearFilter() {
+    setSelectionId(undefined);
     setIntentQuery(undefined);
     setQueryInvalid(false);
     setIntentNotice(false);
@@ -198,8 +190,26 @@ export function LibraryScreen({
           return;
         }
         const summary = await repository.getSummary();
-        setSavedSelections(await repository.getSelections());
         if (request !== generation.current) return;
+
+        if (selectionId) {
+          const selection = await repository.getSelection(selectionId);
+          if (!selection) {
+            setError('UNKNOWN');
+            setBusy(false);
+            return;
+          }
+          const selectionPage = await repository.getSelectionPage(
+            selectionId,
+            { limit: 60, cursor },
+          );
+          if (request !== generation.current) return;
+          setPage(selectionPage);
+          setSelected(selection.assetIds);
+          setPrompt(selection.name);
+          setBusy(false);
+          return;
+        }
 
         const canUseIndex =
           summary.photos + summary.videos > 0 &&
@@ -265,6 +275,7 @@ export function LibraryScreen({
       repository,
       searchVersion,
       intentQuery,
+      selectionId,
       queryInvalid,
     ],
   );
@@ -448,21 +459,6 @@ export function LibraryScreen({
                 label={t('saveSelection')}
                 onPress={() => setSaveSelectionModal(true)}
               />
-            )}
-            {savedSelections.length > 0 && (
-              <View style={{ gap: 8 }}>
-                <Text style={{ color: colors.muted }}>{t('savedSelections')}</Text>
-                {savedSelections.map((selection) => (
-                  <Pressable
-                    key={selection.id}
-                    accessibilityRole="button"
-                    onPress={() => void openSavedSelection(selection)}
-                    style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.surface }}
-                  >
-                    <Text style={{ color: colors.text }}>{selection.name}</Text>
-                  </Pressable>
-                ))}
-              </View>
             )}
             <Button
               variant="outline"

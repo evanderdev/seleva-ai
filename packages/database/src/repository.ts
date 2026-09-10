@@ -37,6 +37,13 @@ interface ScanJobRow {
   updated_at: number;
   error: string | null;
 }
+interface SelectionRow {
+  id: string;
+  name: string;
+  query_json: string | null;
+  created_at: number;
+  updated_at: number;
+}
 // Full analyses satisfy fast work too. Android v2 fixes whole-image visual hashing.
 function pendingForStage(fastOnly = false): string {
   const complete =
@@ -66,6 +73,40 @@ function hammingExpression(left: string, right: string): string {
 export class PhotoRepository {
   constructor(private readonly db: SqlDatabase) {}
 
+  private toAsset(row: PhotoRow): PhotoAsset {
+    return {
+      id: row.id,
+      mediaType: row.media_type,
+      createdAt: row.created_at,
+      width: row.width,
+      height: row.height,
+      modifiedAt: row.modified_at ?? undefined,
+      duration: row.duration ?? undefined,
+      fileSize: row.file_size ?? undefined,
+      isFavorite: row.favorite === 1,
+      latitude: row.latitude ?? undefined,
+      longitude: row.longitude ?? undefined,
+    };
+  }
+
+  private async hydrateSelection(row: SelectionRow): Promise<Selection> {
+    const members = await this.db.getAllAsync<{ photo_id: string }>(
+      'SELECT photo_id FROM saved_selection_members WHERE selection_id=? ORDER BY photo_id', row.id,
+    );
+    let query: QueryPlan | undefined;
+    if (row.query_json) {
+      try { query = JSON.parse(row.query_json) as QueryPlan; } catch { query = undefined; }
+    }
+    return {
+      id: row.id,
+      name: row.name,
+      assetIds: members.map((member) => member.photo_id),
+      query,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   async saveSelection(
     name: string,
     assetIds: string[],
@@ -92,21 +133,17 @@ export class PhotoRepository {
   }
 
   async getSelections(): Promise<Selection[]> {
-    const rows = await this.db.getAllAsync<{ id: string; name: string; query_json: string | null; created_at: number; updated_at: number }>(
+    const rows = await this.db.getAllAsync<SelectionRow>(
       'SELECT * FROM saved_selections ORDER BY updated_at DESC',
     );
-    const result: Selection[] = [];
-    for (const row of rows) {
-      const members = await this.db.getAllAsync<{ photo_id: string }>(
-        'SELECT photo_id FROM saved_selection_members WHERE selection_id=? ORDER BY photo_id', row.id,
-      );
-      let query: QueryPlan | undefined;
-      if (row.query_json) {
-        try { query = JSON.parse(row.query_json) as QueryPlan; } catch { query = undefined; }
-      }
-      result.push({ id: row.id, name: row.name, assetIds: members.map((member) => member.photo_id), query, createdAt: row.created_at, updatedAt: row.updated_at });
-    }
-    return result;
+    return Promise.all(rows.map((row) => this.hydrateSelection(row)));
+  }
+
+  async getSelection(id: string): Promise<Selection | undefined> {
+    const [row] = await this.db.getAllAsync<SelectionRow>(
+      'SELECT * FROM saved_selections WHERE id=? LIMIT 1', id,
+    );
+    return row ? this.hydrateSelection(row) : undefined;
   }
 
   async getAssetsByIds(ids: string[]): Promise<AssetPage> {
@@ -116,13 +153,29 @@ export class PhotoRepository {
       `SELECT p.*, p.created_at AS sort_value FROM photos p WHERE p.id IN (${unique.map(() => '?').join(',')}) ORDER BY p.created_at DESC, p.id DESC`,
       ...unique,
     );
-    return { assets: rows.map((row) => ({
-      id: row.id, mediaType: row.media_type, createdAt: row.created_at,
-      width: row.width, height: row.height, modifiedAt: row.modified_at ?? undefined,
-      duration: row.duration ?? undefined, fileSize: row.file_size ?? undefined,
-      isFavorite: row.favorite === 1, latitude: row.latitude ?? undefined,
-      longitude: row.longitude ?? undefined,
-    })) };
+    return { assets: rows.map((row) => this.toAsset(row)) };
+  }
+
+  async getSelectionPage(id: string, page: PageRequest): Promise<AssetPage> {
+    const offset = page.cursor === undefined ? 0 : Number(page.cursor);
+    if (!Number.isInteger(offset) || offset < 0)
+      throw new Error('INVALID_CURSOR');
+    const rows = await this.db.getAllAsync<PhotoRow>(
+      `SELECT p.*, p.created_at AS sort_value
+       FROM saved_selection_members m
+       INNER JOIN photos p ON p.id = m.photo_id
+       WHERE m.selection_id=?
+       ORDER BY p.created_at DESC, p.id DESC
+       LIMIT ? OFFSET ?`,
+      id, page.limit + 1, offset,
+    );
+    const visible = rows.slice(0, page.limit);
+    return {
+      assets: visible.map((row) => this.toAsset(row)),
+      nextCursor: rows.length > page.limit
+        ? String(offset + page.limit)
+        : undefined,
+    };
   }
 
   async getInsights() {

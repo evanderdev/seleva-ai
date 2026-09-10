@@ -2,8 +2,26 @@ import { createIntentEngine } from './engine';
 import { createOnnxEmbeddingProvider } from './onnx-provider';
 import { createSemanticMatcher, type PrototypeVector } from './semantic';
 import prototypeVectors from './prototype-vectors.json';
+import { NativeModules } from 'react-native';
+
+type OnnxRuntimeModule = {
+  install?: unknown;
+};
+
+/**
+ * ONNX Runtime for React Native still exposes its native bridge module under
+ * `NativeModules`. Development builds using a different native runtime may not
+ * include that bridge, so semantic intent matching must remain optional.
+ */
+export function isOnnxRuntimeAvailable(): boolean {
+  const onnxModule = (NativeModules as {
+    Onnxruntime?: OnnxRuntimeModule;
+  }).Onnxruntime;
+  return Boolean(onnxModule && typeof onnxModule.install === 'function');
+}
 
 const provider = createOnnxEmbeddingProvider(async () => {
+  if (!isOnnxRuntimeAvailable()) throw new Error('ONNX_RUNTIME_UNAVAILABLE');
   const [{ Asset }, { File }, { Tokenizer }, ort] = await Promise.all([
     import('expo-asset'),
     import('expo-file-system'),

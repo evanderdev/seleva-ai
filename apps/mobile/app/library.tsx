@@ -12,6 +12,7 @@ export default function Library() {
     minBlur?: string;
     ocrTerms?: string;
     query?: string;
+    selectionId?: string;
     notice?: string;
   }>();
   const categories = [
@@ -47,6 +48,7 @@ export default function Library() {
     <LibraryScreen
       key={JSON.stringify(params)}
       initialQuery={query}
+      initialSelectionId={params.selectionId}
       initialQueryInvalid={invalidQuery}
       initialIntentNotice={params.notice === '1'}
       initialPrompt={params.prompt}

@@ -17,6 +17,8 @@ import { Reveal, useReducedMotion } from '../components/Motion';
 import { useLibrary } from '../features/library/LibraryProvider';
 import { LibraryStatus } from '../features/library/LibraryStatus';
 import { usePromptInterpreter } from '../features/search/usePromptInterpreter';
+import { usePhotoRepository } from '../services/database';
+import type { Selection } from '@seleva/core';
 
 function SummaryCard({
   label,
@@ -80,11 +82,23 @@ export function AssistantScreen() {
   const { interpret, interpreting, intentError, clearIntentError } =
     usePromptInterpreter();
   const [focused, setFocused] = useState(false);
+  const repository = usePhotoRepository();
   const { synchronize, insights } = useLibrary();
+  const [savedSelections, setSavedSelections] = useState<Selection[]>([]);
   useFocusEffect(
     useCallback(() => {
+      let active = true;
       void synchronize();
-    }, [synchronize]),
+      void repository
+        .getSelections()
+        .then((selections) => {
+          if (active) setSavedSelections(selections);
+        })
+        .catch(() => undefined);
+      return () => {
+        active = false;
+      };
+    }, [repository, synchronize]),
   );
   async function submit() {
     const result = await interpret(prompt);
@@ -245,6 +259,31 @@ export function AssistantScreen() {
             />
           </View>
         </Reveal>
+        {savedSelections.length > 0 && (
+          <Reveal delay={140}>
+            <View style={[layout.row, styles.sectionHeader]}>
+              <Text
+                accessibilityRole="header"
+                style={{ color: colors.text, fontSize: 18, fontWeight: '600' }}
+              >
+                {t('savedSelections')}
+              </Text>
+            </View>
+            <View style={styles.grid}>
+              {savedSelections.map((selection) => (
+                <SummaryCard
+                  key={selection.id}
+                  label={selection.name}
+                  detail={t('savedSelectionItems', {
+                    count: selection.assetIds.length,
+                  })}
+                  icon="check"
+                  params={{ selectionId: selection.id }}
+                />
+              ))}
+            </View>
+          </Reveal>
+        )}
         <Reveal delay={180}>
           {sectionHeader(t('filter_videos'), 'videos')}
           <Pressable

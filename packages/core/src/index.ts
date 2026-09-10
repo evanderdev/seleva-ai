@@ -22,7 +22,7 @@ export interface OCRText { text: string; language?: string; confidence?: number;
 export type QualitySignalKind = 'blur' | 'brightness' | 'contrast' | 'face' | 'resolution' | 'noise' | 'composition';
 export interface QualitySignal { kind: QualitySignalKind; score: number; }
 export interface Selection { id: string; name: string; assetIds: string[]; query?: QueryPlan; createdAt: number; updatedAt: number; }
-export type SelectionOperation = 'add' | 'restrict' | 'exclude' | 'remove' | 'replace' | 'expand';
+export type SelectionOperation = 'add' | 'restrict' | 'exclude' | 'remove' | 'replace' | 'broaden';
 export interface SearchIntent { kind: 'search' | 'refine'; query: QueryPlan; operation?: SelectionOperation; }
 export type GalleryAction = 'trash' | 'share' | 'favorite' | 'unfavorite' | 'save-selection';
 export interface ActionIntent { action: GalleryAction; selectionId?: string; requiresConfirmation: true; }
@@ -204,7 +204,7 @@ export const queryPlanSchema = z.strictObject({
 });
 export type QueryPlan = z.infer<typeof queryPlanSchema>;
 export type PhotoQueryPlan = QueryPlan;
-export const selectionOperationSchema = z.enum(['add', 'restrict', 'exclude', 'remove', 'replace', 'expand']);
+export const selectionOperationSchema = z.enum(['add', 'restrict', 'exclude', 'remove', 'replace', 'broaden']);
 export const selectionSchema = z.strictObject({ id: z.string().min(1), name: z.string().trim().min(1).max(120), assetIds: z.array(z.string().min(1)), query: queryPlanSchema.optional(), createdAt: timestamp, updatedAt: timestamp });
 export const searchIntentSchema = z.strictObject({ kind: z.enum(['search', 'refine']), query: queryPlanSchema, operation: selectionOperationSchema.optional() });
 export const actionIntentSchema = z.strictObject({ action: z.enum(['trash', 'share', 'favorite', 'unfavorite', 'save-selection']), selectionId: z.string().min(1).optional(), requiresConfirmation: z.literal(true) });

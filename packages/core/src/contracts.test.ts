@@ -28,6 +28,8 @@ describe('boundary validation', () => {
     expect(qualitySignalSchema.safeParse({ kind: 'blur', score: 1.2 }).success).toBe(false);
     expect(selectionSchema.safeParse({ id: 'selection-1', name: 'Trip', assetIds: ['asset-1'], createdAt: 1, updatedAt: 2 }).success).toBe(true);
     expect(searchIntentSchema.safeParse({ kind: 'refine', query: {}, operation: 'restrict' }).success).toBe(true);
+    expect(searchIntentSchema.safeParse({ kind: 'refine', query: {}, operation: 'broaden' }).success).toBe(true);
+    expect(searchIntentSchema.safeParse({ kind: 'refine', query: {}, operation: 'expand' }).success).toBe(false);
     expect(actionIntentSchema.safeParse({ action: 'trash', requiresConfirmation: true }).success).toBe(true);
     expect(actionIntentSchema.safeParse({ action: 'trash', requiresConfirmation: false }).success).toBe(false);
   });
