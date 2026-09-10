@@ -7,6 +7,8 @@ não uma garantia da consulta; maxResults limita o conjunto total paginado.
 
 PhotoRepository executa o subconjunto implementado com SQL parametrizado, FTS5 e clusters de
 hashes calculados pelo worker nativo.
-Proteções não suportadas geram erro, nunca são ignoradas. IntentProvider só interpreta
-planos; RuleIntentProvider e a conexão do campo Ask Seleva serão implementados nas etapas 18–19.
-Nenhum provider executa exclusão.
+Proteções não suportadas geram erro, nunca são ignoradas. O campo Ask Seleva usa o Seleva Intent
+Engine assíncrono: regras de alta confiança, datas naturais e fallback semântico multilíngue local
+geram um `SelevaIntent` validado e, quando suportado, o `QueryPlan` existente. Intenções reconhecidas
+que ainda não possuem API de galeria retornam um estado explícito. Nenhum provider executa exclusão.
+Ver `docs/intent-engine.md`.

@@ -20,7 +20,6 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - Esta regra substitui a fila de analise serial descrita abaixo: fast usa ate 3 thumbnails simultaneos e deep usa 1; lotes de analise ate 20. OCR e SHA-256 ficam somente em deep. Pausa drena tarefas em andamento sem interromper ML Kit.
 - Clusters globais: no maximo uma atualizacao a cada 5 segundos durante lotes, mais atualizacao terminal. ACK continua depois do commit SQLite. Thumbnail indisponivel nao deve marcar analise como concluida.
 
-
 - Prioridade atual: Android; iOS fica para depois, conforme orientação do usuário.
 - Android: `PhotoScanRunner` coordena lotes/ACKs, `PhotoAnalyzer` executa OCR/hashes/qualidade, `PhotoThumbnailStore` cuida das miniaturas e `PhotoLibraryService` do MediaStore. `PhotoWorker` mantém filas seriais separadas para scan (prioridade background), miniaturas e consultas. Analise limitada a 20 assets por lote, ate 3 bitmaps em fast, um bitmap/OCR em deep e um reconhecedor por lote deep. No teardown, suprimir eventos, liberar ACK e terminar o asset em andamento sem interromper ML Kit enquanto usa o bitmap.
 - Insights durante scan são coalescidos e limitados a uma atualização por segundo após liberar resultados; transições finais sempre atualizam. SQLite mantém o fluxo assíncrono existente e ACK depois do commit.
@@ -49,7 +48,7 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - Screenshots Android usam heurística de nome/pasta; iOS usa subtipo PhotoKit. Não tratar esses resultados como recomendação automática de exclusão.
 - A navegação principal é um Stack: Home com prompt/sugestões, resultados em `/library` e Settings no único botão do cabeçalho. Não reintroduzir abas inferiores.
 - O Development Build usa `expo-splash-screen` com plugin no `app.config.ts`; ao adicionar módulos Expo nativos, executar prebuild antes do Gradle.
-- O prompt usa somente regras locais neste incremento: screenshots/prints, vídeos, favoritos, fotos e termos de idade. A rota de resultados mantém filtros e permite voltar para refazer a consulta.
+- Intent Engine (2026-09-09): o prompt usa contrato assíncrono `SelevaIntent` validado por Zod, aliases determinísticos, datas naturais encapsuladas por `chrono-node` e fallback semântico local lazy com MiniLM multilíngue quantizado/ONNX Runtime. Texto original vai ao embedding; identifiers internos ficam em inglês. Pesos/tokenizer são fixados por revisão/checksum e preparados por `pnpm intent:model`; protótipos são pré-calculados. Nenhum prompt, embedding ou imagem sai do aparelho. O planner só entrega `QueryPlan` suportado; categoria/ação/ranking ainda indisponível retorna estado explícito. Linguagem destrutiva nunca chama a lixeira e preserva revisão/confirmações existentes.
 - Preferência `themeMode` (light/dark) é persistida junto ao idioma; o Home já aplica o fundo escuro e os próximos componentes devem consumir a mesma preferência.
 
 - Tema de referência centralizado em `packages/ui`: `ThemeProvider`/`useTheme`, paletas claras/escuras, botões e ícones nativos. Novos componentes devem consumir esses tokens, sem cores de texto fixas do tema claro.
@@ -65,7 +64,6 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - [x] Home simplificada (2026-09-08): pergunta e prompt no topo, módulos de Fotos e Vídeos separados abaixo e status discreto, substituindo o resumo técnico antes do prompt. Entrada suave e resposta ao toque com Animated nativo, respeitando movimento reduzido; mantém tokens claros/escuros e messages en/pt-BR/es. Sem dependências novas. Validação visual e fluidez em aparelho pendentes.
 
 - [x] Pipeline fast/deep, cache por etapa, resultados de metadata progressivos e labels en/pt-BR/es. Instrumentacao agregada Android/JS, sem dados pessoais. Ver docs/scan-pipeline.md para validacao e limites.
-
 
 - [x] Modularização Android e isolamento das filas nativas; liberação de bitmaps em falhas OCR e proteção quando a imagem redimensionada é a própria origem. Lint, typecheck, 66 testes Jest, 2 testes JVM e APK arm64 passaram. APK instalado e app aberto no aparelho; estabilidade prolongada/30k+ assets ainda pendente.
 - [x] Primeira extração da UI da galeria: thumbnail e célula virtualizada isolados em componentes memoizados, com callbacks estáveis e seleção em `Set`. Typecheck, lint e 66 testes passaram.
@@ -103,6 +101,8 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - [ ] Etapa 10, completa: reconciliação de removidos ao fim de scans completos e análise incremental por modificação/versão implementadas; enumeração incremental e WorkManager/background execution ainda pendentes.
 - [x] Etapas 11–14, base local: blur/brilho, pHash, hash de conteúdo, OCR nativo e clusters são persistidos em lotes; validação iOS ainda pendente.
 - [ ] Etapas 15–21: ranking de candidatos, melhor foto, background completo, regras avançadas de intenção e polish.
+- [x] Seleva Intent Engine: entrada livre en/pt/es, canonical intent, aliases, tamanhos, datas naturais, fallback semântico ONNX multilíngue, lifecycle lazy, validação Zod, planner para `QueryPlan`, integração Home/edição e degradação explícita. Ranking de cleanup, categorias sem labels e best-shot continuam dependentes das etapas futuras.
+- [x] Validação Android do Intent Engine: prebuild CNG e APK arm64 passaram com ONNX Runtime 1.24.3; patch pnpm remove dependências de teste/ramo RN <0.71 incompatíveis com Gradle 9 e fixa o AAR Android em 1.24.3. Metro/Hermes empacotou o modelo quantizado e tokenizer. Benchmark local de quatro frases inéditas passou; primeira inferência ~652 ms no desktop, seguintes 9–11 ms. Medição em aparelho continua pendente.
 
 - [x] Tema das referências aplicado à Home, resultados, painel inferior de busca e configurações; preferências claras/escuras em todas essas telas, traduções en/pt-BR/es e funcionalidades locais conectadas.
 - [ ] Comparação visual final do tema no aparelho desbloqueado e no iOS.

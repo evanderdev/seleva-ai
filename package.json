@@ -20,19 +20,28 @@
     "dev:go": "pnpm --filter @seleva/mobile dev:go",
     "dev:android": "pnpm --filter @seleva/mobile android",
     "dev:ios": "pnpm --filter @seleva/mobile ios",
-    "prebuild": "pnpm --filter @seleva/mobile prebuild"
+    "prebuild": "pnpm --filter @seleva/mobile prebuild",
+    "intent:model": "tsx tooling/intent-model.ts",
+    "intent:benchmark": "tsx tooling/intent-benchmark.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
     "@types/jest": "^29.5.14",
+    "@types/node": "^22.19.0",
     "@types/react": "^19.2.0",
     "eslint": "^9.39.0",
     "jest": "^29.7.0",
+    "onnxruntime-node": "1.24.3",
     "prettier": "^3.6.2",
     "ts-jest": "^29.4.0",
+    "tsx": "4.20.0",
     "turbo": "^2.5.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.46.0",
-    "@types/node": "^22.19.0"
+    "typescript-eslint": "^8.46.0"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "onnxruntime-react-native@1.24.3": "patches/onnxruntime-react-native@1.24.3.patch"
+    }
   }
 }

@@ -38,6 +38,13 @@ export const en = {
   back: 'Go back',
   removeFilter: 'Remove filter',
   invalidPrompt: 'Enter a search of 1 to 500 characters.',
+  intentInterpreting: 'Understanding your request…',
+  intentClarify:
+    'Try adding what you want to find, such as screenshots, duplicates, dates or a search term.',
+  intentUnsupported:
+    'Seleva understood this request, but this gallery capability is not available yet.',
+  intentReviewNotice:
+    'Seleva found safe filters for this request. Review every item before taking action.',
   manageLibrary: 'Manage library',
   moveToTrash: 'Move selected to trash',
   confirmMoveToTrashTitle: 'Move to trash?',
@@ -198,6 +205,13 @@ export const ptBR: Messages = {
   back: 'Voltar',
   removeFilter: 'Remover filtro',
   invalidPrompt: 'Digite uma busca com 1 a 500 caracteres.',
+  intentInterpreting: 'Entendendo seu pedido…',
+  intentClarify:
+    'Adicione o que deseja encontrar, como prints, duplicadas, datas ou um termo de busca.',
+  intentUnsupported:
+    'A Seleva entendeu o pedido, mas esse recurso da galeria ainda não está disponível.',
+  intentReviewNotice:
+    'A Seleva encontrou filtros seguros para o pedido. Revise cada item antes de agir.',
   manageLibrary: 'Gerenciar biblioteca',
   confirmMoveToTrashTitle: 'Mover para a lixeira?',
   confirmMoveToTrashMessage:
@@ -362,6 +376,13 @@ export const es: Messages = {
   back: 'Volver',
   removeFilter: 'Quitar filtro',
   invalidPrompt: 'Escribe una búsqueda de 1 a 500 caracteres.',
+  intentInterpreting: 'Interpretando tu solicitud…',
+  intentClarify:
+    'Añade qué quieres encontrar, como capturas, duplicados, fechas o un término de búsqueda.',
+  intentUnsupported:
+    'Seleva entendió la solicitud, pero esta función de la galería aún no está disponible.',
+  intentReviewNotice:
+    'Seleva encontró filtros seguros para la solicitud. Revisa cada elemento antes de actuar.',
   manageLibrary: 'Administrar biblioteca',
   confirmMoveToTrashTitle: '¿Mover a la papelera?',
   confirmMoveToTrashMessage:

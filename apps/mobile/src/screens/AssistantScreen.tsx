@@ -16,7 +16,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { Reveal, useReducedMotion } from '../components/Motion';
 import { useLibrary } from '../features/library/LibraryProvider';
 import { LibraryStatus } from '../features/library/LibraryStatus';
-import { planPrompt, promptSchema } from '../features/search/prompt';
+import { usePromptInterpreter } from '../features/search/usePromptInterpreter';
 
 function SummaryCard({
   label,
@@ -77,7 +77,8 @@ export function AssistantScreen() {
   const { t } = useTranslation();
   const colors = useTheme();
   const [prompt, setPrompt] = useState('');
-  const [invalid, setInvalid] = useState(false);
+  const { interpret, interpreting, intentError, clearIntentError } =
+    usePromptInterpreter();
   const [focused, setFocused] = useState(false);
   const { synchronize, insights } = useLibrary();
   useFocusEffect(
@@ -85,22 +86,15 @@ export function AssistantScreen() {
       void synchronize();
     }, [synchronize]),
   );
-  function submit() {
-    const parsed = promptSchema.safeParse(prompt);
-    setInvalid(!parsed.success);
-    if (!parsed.success) return;
-    const p = planPrompt(parsed.data);
+  async function submit() {
+    const result = await interpret(prompt);
+    if (!result) return;
     router.push({
       pathname: '/library',
       params: {
-        prompt: parsed.data,
-        category: p.category,
-        before: p.before?.toString(),
-        minFileSize: p.minFileSize?.toString(),
-        duplicate: p.duplicate ? '1' : undefined,
-        similar: p.similar ? '1' : undefined,
-        minBlur: p.minBlur?.toString(),
-        ocrTerms: p.ocrTerms?.join(','),
+        prompt: prompt.trim(),
+        query: JSON.stringify(result.query),
+        notice: result.notice ? '1' : undefined,
       },
     });
   }
@@ -163,11 +157,11 @@ export function AssistantScreen() {
                 value={prompt}
                 onChangeText={(value) => {
                   setPrompt(value);
-                  setInvalid(false);
+                  clearIntentError();
                 }}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
-                onSubmitEditing={submit}
+                onSubmitEditing={() => void submit()}
                 returnKeyType="search"
                 maxLength={500}
                 placeholder={t('assistantPlaceholder')}
@@ -182,11 +176,13 @@ export function AssistantScreen() {
               />
             </View>
             <Pressable
-              onPress={submit}
-              disabled={!prompt.trim()}
+              onPress={() => void submit()}
+              disabled={!prompt.trim() || interpreting}
               accessibilityRole="button"
               accessibilityLabel={t('search')}
-              accessibilityState={{ disabled: !prompt.trim() }}
+              accessibilityState={{
+                disabled: !prompt.trim() || interpreting,
+              }}
               style={({ pressed }) => [
                 styles.send,
                 {
@@ -204,12 +200,12 @@ export function AssistantScreen() {
               />
             </Pressable>
           </View>
-          {invalid && (
+          {(intentError || interpreting) && (
             <Text
               accessibilityRole="alert"
               style={{ color: colors.text, marginTop: 8 }}
             >
-              {t('invalidPrompt')}
+              {t(intentError ?? 'intentInterpreting')}
             </Text>
           )}
         </Reveal>

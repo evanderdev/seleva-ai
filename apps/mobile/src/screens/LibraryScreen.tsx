@@ -31,7 +31,7 @@ import {
 } from '@seleva/ui';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { planPrompt, promptSchema } from '../features/search/prompt';
+import { usePromptInterpreter } from '../features/search/usePromptInterpreter';
 import { LibraryStatus } from '../features/library/LibraryStatus';
 import { usePhotoRepository } from '../services/database';
 import type { QueryPlan } from '@seleva/core';
@@ -49,6 +49,9 @@ export function LibraryScreen({
   initialMinBlur,
   initialOcrTerms,
   initialPrompt = '',
+  initialQuery,
+  initialQueryInvalid = false,
+  initialIntentNotice = false,
 }: {
   mode?: 'library' | 'search' | 'clean';
   initialCategory?: LibraryFilter['category'];
@@ -59,6 +62,9 @@ export function LibraryScreen({
   initialMinBlur?: number;
   initialOcrTerms?: string[];
   initialPrompt?: string;
+  initialQuery?: QueryPlan;
+  initialQueryInvalid?: boolean;
+  initialIntentNotice?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const colors = useTheme();
@@ -85,31 +91,38 @@ export function LibraryScreen({
   const [prompt, setPrompt] = useState(initialPrompt);
   const [draft, setDraft] = useState(initialPrompt);
   const [editing, setEditing] = useState(false);
-  const [invalid, setInvalid] = useState(false);
+  const { interpret, interpreting, intentError, clearIntentError } =
+    usePromptInterpreter();
+  const [intentQuery, setIntentQuery] = useState(initialQuery);
+  const [queryInvalid, setQueryInvalid] = useState(initialQueryInvalid);
+  const [intentNotice, setIntentNotice] = useState(initialIntentNotice);
   const trashInFlight = useRef(false);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   function editSearch() {
     setDraft(prompt);
-    setInvalid(false);
     setEditing(true);
   }
-  function applySearch() {
-    const parsed = promptSchema.safeParse(draft);
-    setInvalid(!parsed.success);
-    if (!parsed.success) return;
-    const plan = planPrompt(parsed.data);
-    setCategory(plan.category);
-    setBefore(plan.before);
-    setMinFileSize(plan.minFileSize);
-    setDuplicate(Boolean(plan.duplicate));
-    setSimilar(Boolean(plan.similar));
-    setMinBlur(plan.minBlur);
-    setOcrTerms(plan.ocrTerms);
+  async function applySearch() {
+    const result = await interpret(draft);
+    if (!result) return;
+    setCategory('all');
+    setBefore(undefined);
+    setMinFileSize(undefined);
+    setDuplicate(false);
+    setSimilar(false);
+    setMinBlur(undefined);
+    setOcrTerms(undefined);
+    setIntentQuery(result.query);
+    setQueryInvalid(false);
+    setIntentNotice(result.notice);
     setSearchVersion((value) => value + 1);
-    setPrompt(parsed.data);
+    setPrompt(draft.trim());
     setEditing(false);
   }
   function clearFilter() {
+    setIntentQuery(undefined);
+    setQueryInvalid(false);
+    setIntentNotice(false);
     setCategory('all');
     setBefore(undefined);
     setMinFileSize(undefined);
@@ -152,6 +165,11 @@ export function LibraryScreen({
       setSelected([]);
       setPreview(undefined);
       try {
+        if (queryInvalid) {
+          setError('DEVICE_UNSUPPORTED');
+          setBusy(false);
+          return;
+        }
         const summary = await repository.getSummary();
         if (request !== generation.current) return;
 
@@ -159,6 +177,7 @@ export function LibraryScreen({
           summary.photos + summary.videos > 0 &&
           (minFileSize === undefined || summary.photos + summary.videos > 0);
         const requiresAnalysis =
+          Boolean(intentQuery) ||
           duplicate ||
           similar ||
           minBlur !== undefined ||
@@ -183,7 +202,10 @@ export function LibraryScreen({
               if (minBlur !== undefined) filters.minBlur = minBlur;
               if (ocrTerms?.length) filters.ocrTerms = ocrTerms;
               const page = await repository.query(
-                { filters, exclusions: { favorites: false } },
+                intentQuery ?? {
+                  filters,
+                  exclusions: { favorites: false },
+                },
                 { limit: 60, cursor },
               );
               return { ok: true as const, value: page };
@@ -214,6 +236,8 @@ export function LibraryScreen({
       ocrTerms,
       repository,
       searchVersion,
+      intentQuery,
+      queryInvalid,
     ],
   );
   useFocusEffect(
@@ -240,6 +264,11 @@ export function LibraryScreen({
   return (
     <SafeAreaView style={styles.screen}>
       <ScreenHeader title={t('results')} onSearch={editSearch} />
+      {intentNotice && (
+        <Text style={{ color: colors.muted, paddingHorizontal: 16 }}>
+          {t('intentReviewNotice')}
+        </Text>
+      )}
       <FlatList
         data={page.assets}
         numColumns={2}
@@ -480,9 +509,12 @@ export function LibraryScreen({
                 <TextInput
                   autoFocus
                   value={draft}
-                  onChangeText={setDraft}
+                  onChangeText={(value) => {
+                    setDraft(value);
+                    clearIntentError();
+                  }}
                   maxLength={500}
-                  onSubmitEditing={applySearch}
+                  onSubmitEditing={() => void applySearch()}
                   returnKeyType="search"
                   accessibilityLabel={t('adjustSearch')}
                   placeholder={t('assistantPlaceholder')}
@@ -490,14 +522,15 @@ export function LibraryScreen({
                   style={{ flex: 1, minHeight: 50, color: colors.text }}
                 />
               </View>
-              {invalid && (
+              {(intentError || interpreting) && (
                 <Text accessibilityRole="alert" style={{ color: colors.text }}>
-                  {t('invalidPrompt')}
+                  {t(intentError ?? 'intentInterpreting')}
                 </Text>
               )}
               <Button
                 label={t('updateResults')}
-                onPress={applySearch}
+                onPress={() => void applySearch()}
+                disabled={interpreting}
               />
             </View>
           </SafeAreaView>

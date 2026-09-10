@@ -29,6 +29,7 @@ const config: ExpoConfig = {
     'expo-splash-screen',
     'expo-font',
     'expo-asset',
+    'onnxruntime-react-native',
     ['expo-sqlite', { enableFTS: true }],
   ],
 };
