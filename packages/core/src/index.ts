@@ -14,6 +14,26 @@ export interface PhotoAsset {
   longitude?: number;
 }
 
+/** Platform-independent entities used by the selection and search layers. */
+export interface Person { id: string; displayName?: string; confidence?: number; }
+export interface Place { id: string; name?: string; latitude?: number; longitude?: number; }
+export interface Label { name: string; confidence?: number; }
+export interface OCRText { text: string; language?: string; confidence?: number; }
+export type QualitySignalKind = 'blur' | 'brightness' | 'contrast' | 'face' | 'resolution' | 'noise' | 'composition';
+export interface QualitySignal { kind: QualitySignalKind; score: number; }
+export interface Selection { id: string; name: string; assetIds: string[]; query?: QueryPlan; createdAt: number; updatedAt: number; }
+export type SelectionOperation = 'add' | 'restrict' | 'exclude' | 'remove' | 'replace' | 'expand';
+export interface SearchIntent { kind: 'search' | 'refine'; query: QueryPlan; operation?: SelectionOperation; }
+export type GalleryAction = 'trash' | 'share' | 'favorite' | 'unfavorite' | 'save-selection';
+export interface ActionIntent { action: GalleryAction; selectionId?: string; requiresConfirmation: true; }
+
+const boundedConfidence = z.number().min(0).max(1);
+export const personSchema = z.strictObject({ id: z.string().min(1), displayName: z.string().min(1).optional(), confidence: boundedConfidence.optional() });
+export const placeSchema = z.strictObject({ id: z.string().min(1), name: z.string().min(1).optional(), latitude: z.number().min(-90).max(90).optional(), longitude: z.number().min(-180).max(180).optional() });
+export const labelSchema = z.strictObject({ name: z.string().min(1), confidence: boundedConfidence.optional() });
+export const ocrTextSchema = z.strictObject({ text: z.string(), language: z.string().min(1).optional(), confidence: boundedConfidence.optional() });
+export const qualitySignalSchema = z.strictObject({ kind: z.enum(['blur', 'brightness', 'contrast', 'face', 'resolution', 'noise', 'composition']), score: boundedConfidence });
+
 export interface PhotoAnalysis {
   photoId: string;
   analysisVersion: number;
@@ -184,6 +204,10 @@ export const queryPlanSchema = z.strictObject({
 });
 export type QueryPlan = z.infer<typeof queryPlanSchema>;
 export type PhotoQueryPlan = QueryPlan;
+export const selectionOperationSchema = z.enum(['add', 'restrict', 'exclude', 'remove', 'replace', 'expand']);
+export const selectionSchema = z.strictObject({ id: z.string().min(1), name: z.string().trim().min(1).max(120), assetIds: z.array(z.string().min(1)), query: queryPlanSchema.optional(), createdAt: timestamp, updatedAt: timestamp });
+export const searchIntentSchema = z.strictObject({ kind: z.enum(['search', 'refine']), query: queryPlanSchema, operation: selectionOperationSchema.optional() });
+export const actionIntentSchema = z.strictObject({ action: z.enum(['trash', 'share', 'favorite', 'unfavorite', 'save-selection']), selectionId: z.string().min(1).optional(), requiresConfirmation: z.literal(true) });
 export type CleanupReason =
   | 'screenshot'
   | 'duplicate'

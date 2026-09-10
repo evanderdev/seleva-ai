@@ -8,6 +8,9 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 ## ⚠️ Regras Estritas
 
+- Foundation de domínio (2026-09-10): `packages/core` expõe contratos agnósticos de plataforma para `Person`, `Place`, `Label`, `OCRText`, `QualitySignal`, `Selection`, `SearchIntent` e `ActionIntent`, todos com schemas Zod. Esses contratos não implicam que os produtores Android/iOS ou a persistência de seleções já existam. O foco de implementação/validação é Android; iOS só começa após o MVP Android.
+- Validação Android da Foundation (2026-09-10): `pnpm.cmd build:android:local` alcançou o projeto nativo, mas falhou em `onnxruntime-react-native:buildCMakeDebug[arm64-v8a]` porque o `clang++.exe` do NDK retornou `Permission denied`. Não declarar Development Build validado até corrigir a permissão/execução do toolchain Windows.
+
 - Android (2026-09-09): hash visual usa aHash de thumbnail 8x8 cobrindo a imagem inteira. `android-fast-2`/`android-heuristic-2` substituem as versões Android v1 no nativo e no predicado de cache; iOS permanece v1. Grupos exact e visual são independentes, com hashes visuais separados por geração; SHA-256 não substitui associação visual. Contagens usam IDs distintos.
 - Lixeira Android: somente `MediaStore.createTrashRequest(..., true)` e resultado do SO; nunca usar exclusão permanente como fallback. Android < 11 retorna indisponível. A revisão usa SafeAreaProvider/SafeAreaView dentro do Modal, conteúdo rolável e rodapé fixo. AppState não pode limpar a seleção enquanto a confirmação da lixeira está em andamento; cancelar preserva seleção e índice.
 
@@ -56,6 +59,8 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 - Resultados mostram contagem e seleção da página (até 60 itens), sem apresentar essa contagem como total global. Prévia e confirmação do SO continuam obrigatórias para lixeira.
 
 ## Estado Atual das Features
+
+- [x] Foundation de domínio completada (2026-09-10): contratos e validações Zod para seleção, busca e ações adicionados em `packages/core`, com teste de fronteira. Sem migration ou dependência nova. Android permanece a plataforma prioritária; validação nativa e comportamento do MVP ainda pendentes.
 
 - [x] Correções Android de hash visual completo e preservação de clusters após deep; revisão com área segura e ação principal única de lixeira, confirmação nativa e mensagens en/pt-BR/es. Sem dependência nova ou migration. Testes SQLite de regressão e testes JVM do hash adicionados.
 
