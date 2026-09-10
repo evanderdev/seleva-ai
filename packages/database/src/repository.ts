@@ -8,6 +8,7 @@ import type {
   ScanJob,
   ScanStatus,
   QueryPlan,
+  Selection,
 } from '@seleva/core';
 import type { SqlDatabase } from './connection';
 import { buildPhotoQuery } from './query';
@@ -49,6 +50,65 @@ const pendingAnalysis = pendingForStage();
 
 export class PhotoRepository {
   constructor(private readonly db: SqlDatabase) {}
+
+  async saveSelection(
+    name: string,
+    assetIds: string[],
+    query?: QueryPlan,
+  ): Promise<Selection> {
+    const cleanName = name.trim();
+    if (!cleanName || cleanName.length > 120) throw new Error('INVALID_SELECTION_NAME');
+    const ids = [...new Set(assetIds)].filter(Boolean);
+    if (!ids.length) throw new Error('EMPTY_SELECTION');
+    const now = Date.now();
+    const id = `selection-${now}-${Math.random().toString(36).slice(2, 8)}`;
+    await this.db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync(
+        'INSERT INTO saved_selections(id,name,query_json,created_at,updated_at) VALUES(?,?,?,?,?)',
+        id, cleanName, query ? JSON.stringify(query) : null, now, now,
+      );
+      for (const assetId of ids)
+        await tx.runAsync(
+          'INSERT OR IGNORE INTO saved_selection_members(selection_id,photo_id) SELECT ?,id FROM photos WHERE id=?',
+          id, assetId,
+        );
+    });
+    return { id, name: cleanName, assetIds: ids, query, createdAt: now, updatedAt: now };
+  }
+
+  async getSelections(): Promise<Selection[]> {
+    const rows = await this.db.getAllAsync<{ id: string; name: string; query_json: string | null; created_at: number; updated_at: number }>(
+      'SELECT * FROM saved_selections ORDER BY updated_at DESC',
+    );
+    const result: Selection[] = [];
+    for (const row of rows) {
+      const members = await this.db.getAllAsync<{ photo_id: string }>(
+        'SELECT photo_id FROM saved_selection_members WHERE selection_id=? ORDER BY photo_id', row.id,
+      );
+      let query: QueryPlan | undefined;
+      if (row.query_json) {
+        try { query = JSON.parse(row.query_json) as QueryPlan; } catch { query = undefined; }
+      }
+      result.push({ id: row.id, name: row.name, assetIds: members.map((member) => member.photo_id), query, createdAt: row.created_at, updatedAt: row.updated_at });
+    }
+    return result;
+  }
+
+  async getAssetsByIds(ids: string[]): Promise<AssetPage> {
+    const unique = [...new Set(ids)].filter(Boolean);
+    if (!unique.length) return { assets: [] };
+    const rows = await this.db.getAllAsync<PhotoRow>(
+      `SELECT p.*, p.created_at AS sort_value FROM photos p WHERE p.id IN (${unique.map(() => '?').join(',')}) ORDER BY p.created_at DESC, p.id DESC`,
+      ...unique,
+    );
+    return { assets: rows.map((row) => ({
+      id: row.id, mediaType: row.media_type, createdAt: row.created_at,
+      width: row.width, height: row.height, modifiedAt: row.modified_at ?? undefined,
+      duration: row.duration ?? undefined, fileSize: row.file_size ?? undefined,
+      isFavorite: row.favorite === 1, latitude: row.latitude ?? undefined,
+      longitude: row.longitude ?? undefined,
+    })) };
+  }
 
   async getInsights() {
     const [row] = await this.db.getAllAsync<{

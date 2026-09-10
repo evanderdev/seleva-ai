@@ -80,6 +80,17 @@ it('does not invent savings for unknown sizes or visual matches', async () => {
     duplicateCopies: 0,
   });
 });
+it('persists saved selections and removes duplicate asset ids', async () => {
+  await photo('a');
+  await photo('b');
+  const saved = await repository.saveSelection('Trip', ['a', 'a', 'b']);
+  expect(saved.name).toBe('Trip');
+  expect((await repository.getSelections())[0]).toMatchObject({
+    id: saved.id, name: 'Trip', assetIds: ['a', 'b'],
+  });
+  await expect(repository.saveSelection(' ', ['a'])).rejects.toThrow('INVALID_SELECTION_NAME');
+  await expect(repository.saveSelection('Empty', [])).rejects.toThrow('EMPTY_SELECTION');
+});
 
 async function photo(id: string, favorite = 0, createdAt = 100, size = 1000) {
   await db.runAsync(
@@ -103,7 +114,7 @@ it('migrates idempotently and preserves data', async () => {
   await migrate(db);
   expect((await repository.getSummary()).photos).toBe(1);
   expect(sqlite.prepare('PRAGMA user_version').get()).toEqual(
-    expect.objectContaining({ user_version: 2 }),
+      expect.objectContaining({ user_version: 3 }),
   );
 });
 it('paginates tied timestamps without duplicates and excludes favorites', async () => {

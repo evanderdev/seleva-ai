@@ -34,7 +34,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { usePromptInterpreter } from '../features/search/usePromptInterpreter';
 import { LibraryStatus } from '../features/library/LibraryStatus';
 import { usePhotoRepository } from '../services/database';
-import type { QueryPlan } from '@seleva/core';
+import type { QueryPlan, Selection } from '@seleva/core';
 import { LibraryGridItem } from '../features/library/components/LibraryGridItem';
 import { Thumbnail } from '../features/library/components/Thumbnail';
 
@@ -84,6 +84,10 @@ export function LibraryScreen({
   );
   const [preview, setPreview] = useState<LibraryPage['assets'][number]>();
   const [selected, setSelected] = useState<string[]>([]);
+  const [savedSelections, setSavedSelections] = useState<Selection[]>([]);
+  const [saveSelectionModal, setSaveSelectionModal] = useState(false);
+  const [selectionName, setSelectionName] = useState('');
+  const [savingSelection, setSavingSelection] = useState(false);
   const [page, setPage] = useState<LibraryPage>({ assets: [] });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -98,6 +102,29 @@ export function LibraryScreen({
   const [intentNotice, setIntentNotice] = useState(initialIntentNotice);
   const trashInFlight = useRef(false);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+  async function saveCurrentSelection() {
+    if (!selectionName.trim() || !selected.length || savingSelection) return;
+    setSavingSelection(true);
+    try {
+      const saved = await repository.saveSelection(selectionName, selected, intentQuery);
+      setSavedSelections((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      setSaveSelectionModal(false);
+      setSelectionName('');
+    } finally {
+      setSavingSelection(false);
+    }
+  }
+  async function openSavedSelection(selection: Selection) {
+    setBusy(true);
+    try {
+      setPage(await repository.getAssetsByIds(selection.assetIds));
+      setSelected(selection.assetIds);
+      setPrompt(selection.name);
+      setIntentQuery(selection.query);
+    } finally {
+      setBusy(false);
+    }
+  }
   function editSearch() {
     setDraft(prompt);
     setEditing(true);
@@ -171,6 +198,7 @@ export function LibraryScreen({
           return;
         }
         const summary = await repository.getSummary();
+        setSavedSelections(await repository.getSelections());
         if (request !== generation.current) return;
 
         const canUseIndex =
@@ -414,6 +442,28 @@ export function LibraryScreen({
                 }
               />
             )}
+            {selected.length > 0 && (
+              <Button
+                variant="outline"
+                label={t('saveSelection')}
+                onPress={() => setSaveSelectionModal(true)}
+              />
+            )}
+            {savedSelections.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <Text style={{ color: colors.muted }}>{t('savedSelections')}</Text>
+                {savedSelections.map((selection) => (
+                  <Pressable
+                    key={selection.id}
+                    accessibilityRole="button"
+                    onPress={() => void openSavedSelection(selection)}
+                    style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.surface }}
+                  >
+                    <Text style={{ color: colors.text }}>{selection.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
             <Button
               variant="outline"
               label={t('refreshLibrary')}
@@ -434,6 +484,36 @@ export function LibraryScreen({
           </View>
         }
       />
+      <Modal
+        visible={saveSelectionModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSaveSelectionModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay }}
+        >
+          <Pressable style={{ flex: 1 }} onPress={() => setSaveSelectionModal(false)} />
+          <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.background, marginHorizontal: 16, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+            <View style={[layout.content, { padding: 20, gap: 14 }]}>
+              <Text style={[layout.title, { color: colors.text, fontSize: 20 }]}>{t('saveSelection')}</Text>
+              <TextInput
+                autoFocus
+                value={selectionName}
+                onChangeText={setSelectionName}
+                maxLength={120}
+                placeholder={t('selectionName')}
+                placeholderTextColor={colors.muted}
+                accessibilityLabel={t('selectionName')}
+                style={{ minHeight: 52, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 14, color: colors.text, backgroundColor: colors.surface }}
+              />
+              <Button label={t('save')} disabled={!selectionName.trim() || savingSelection} onPress={() => void saveCurrentSelection()} />
+              <Button variant="outline" label={t('cancel')} onPress={() => setSaveSelectionModal(false)} />
+            </View>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </Modal>
       <Modal
         visible={editing}
         transparent

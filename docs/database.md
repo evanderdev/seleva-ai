@@ -46,3 +46,13 @@ uma varredura completa. Não usar repositório TS para varrer foto por foto.
 
 Os testes verificam migrations idempotentes/rollback, paginação com empates, FTS e cascatas,
 proteção de favoritas, binding de entradas hostis, ordenação e persistência de preferências.
+# Database
+
+## Migrations
+
+The schema is version 3. Migration 3 adds `saved_selections` and
+`saved_selection_members`, which persist named selections without copying
+media. Members reference the native asset identifiers already stored in
+`photos`; deleting an asset cascades to saved selections. The selection query
+is stored as JSON so it can be reopened with the same filters, while the
+SQLite index remains derived from the native gallery.

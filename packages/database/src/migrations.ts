@@ -66,6 +66,24 @@ ALTER TABLE photo_analysis ADD COLUMN content_hash TEXT;
 CREATE INDEX photo_analysis_content_hash ON photo_analysis(content_hash);
 `,
   },
+  {
+    version: 3,
+    sql: `
+CREATE TABLE saved_selections (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  query_json TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE saved_selection_members (
+  selection_id TEXT NOT NULL REFERENCES saved_selections(id) ON DELETE CASCADE,
+  photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+  PRIMARY KEY(selection_id, photo_id)
+);
+CREATE INDEX saved_selection_members_photo ON saved_selection_members(photo_id);
+`,
+  },
 ] as const;
 
 export async function migrate(db: SqlDatabase): Promise<void> {
