@@ -1,5 +1,6 @@
 import type { PhotoRepository } from '@seleva/database';
 import {
+  createNativeAnalysisComposition,
   parseScanBatch,
   parseScanFailure,
   parseScanProgress,
@@ -75,11 +76,39 @@ export async function runLibraryScan(
             }
             callbacks.onCommitted?.();
             if (batch.requiresAnalysis) {
-              const pending = await repository.getPendingAnalysisIds(
-                batch.assets.map((asset) => asset.id),
-                callbacks.fastOnly,
+              const nativeAnalysis = createNativeAnalysisComposition(
+                callbacks.fastOnly ? 'fast' : 'deep',
+                {
+                  getPendingAnalysisIds: (ids, fastOnly) =>
+                    repository.getPendingAnalysisIds([...ids], fastOnly),
+                  selectAssets: (ids) => photoScanner.selectAssets(job.id, [...ids]),
+                },
+                (stage, milliseconds) => {
+                  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+                    console.debug('[SelevaAI Analysis]', { stage, milliseconds });
+                  }
+                },
               );
-              await photoScanner.selectAssets(job.id, pending);
+              const analysis = await nativeAnalysis.composition.process(
+                { assetIds: batch.assets.map((asset) => asset.id) },
+                nativeAnalysis.capabilities,
+                {
+                  runtime: {
+                    platform: 'android',
+                    osVersion: 23,
+                    permissions: ['photo-library'],
+                    models: callbacks.fastOnly ? [] : ['ml-kit-ocr'],
+                    nativeApis: ['media-store', 'photo-analysis'],
+                    resources: 'normal',
+                  },
+                },
+              );
+              if (analysis.failed.length || analysis.unavailable.length) {
+                throw new Error('ANALYSIS_UNAVAILABLE');
+              }
+              if (!nativeAnalysis.hasDispatched()) {
+                await photoScanner.selectAssets(job.id, []);
+              }
             } else {
               await photoScanner.acknowledgeBatch(job.id);
             }

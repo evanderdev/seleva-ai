@@ -2,6 +2,8 @@
 
 ## Arquitetura vigente
 
+- Analysis Composition nativa (2026-09-10): o scanner Android resolve `content.screenshot`, `quality.visual`, `similarity.perceptual`, `duplicate.exact` e `text.ocr` por analyzers registrados antes de selecionar IDs pendentes. O adapter JS faz uma única seleção por lote e mantém o ACK somente depois do commit SQLite; thumbnails, OCR e hashes continuam no `PhotoScanRunner`/`PhotoAnalyzer` Kotlin. Fast/deep preservam cache e versões `android-fast-2`/`android-heuristic-2`.
+
 O prompt posterior em `docs/specification.md` substitui as escolhas RN CLI/TurboModule manual
 do AGENTS.md original. Usar Expo SDK 57, React Native 0.86.3, React 19.2.3, Expo Router,
 Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
@@ -65,7 +67,8 @@ Development Builds, Expo Modules API e CNG. Workspace pnpm 9.15.0 com Turborepo.
 
 ## Estado Atual das Features
 
-- [x] Etapa inicial da migração da busca (2026-09-10): o caminho SQLite real usa registry, resolver, composition e candidate sets SQL para as capabilities implementadas; lint, typecheck e 92 testes passaram. Ranking de tamanho/qualidade possui provider SQL. Analyzers nativos ainda não foram migrados para `AnalysisComposition`.
+- [x] Etapa inicial da migração da busca (2026-09-10): o caminho SQLite real usa registry, resolver, composition e candidate sets SQL para as capabilities implementadas; lint, typecheck e 92 testes passaram. Ranking de tamanho/qualidade possui provider SQL.
+- [x] Primeira migração da Analysis Composition (2026-09-10): o scanner Android registra adapters nativos para os estágios fast/deep, resolve pendências por cache e despacha uma seleção única por lote antes do ACK. A execução de pixels permanece nativa; persistência, versões e retomada continuam no protocolo existente. Typecheck, lint e 93 testes passaram.
 
 - [x] Refatoração da engine modular (2026-09-10): `SearchExpression`, `SearchRequest`, `CapabilityRegistry`, `CapabilityResolver`, Analysis/Search Composition, analyzers/query processors/search engines/rankers e catálogo inicial de capabilities implementados. Parser, SelectionContext, SQLite e seleções salvas usam a AST; 92 testes, lint e typecheck passam. Providers reais de semantic visual, pessoas e labels continuam planejados e são reportados como indisponíveis.
 

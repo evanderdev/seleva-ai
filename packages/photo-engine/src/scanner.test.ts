@@ -1,8 +1,18 @@
 import {
+  createNativeAnalysisComposition,
   createPhotoScanner,
   parseScanBatch,
   type NativeScanTransport,
 } from './scanner';
+
+const analysisRuntime = {
+  platform: 'android' as const,
+  osVersion: 36,
+  permissions: ['photo-library'],
+  models: ['ml-kit-ocr'],
+  nativeApis: ['media-store', 'photo-analysis'],
+  resources: 'normal' as const,
+};
 
 const batch = {
   jobId: 'scan-1',
@@ -37,6 +47,28 @@ it('requires the metadata entry point instead of silently running heavy analysis
     ),
   ).toEqual({ ok: false, error: 'DEVICE_UNSUPPORTED' });
   expect(native.startScan).not.toHaveBeenCalled();
+});
+
+it('resolves native analyzers once and dispatches a single bounded selection', async () => {
+  const pending = jest.fn(async (ids: readonly string[]) => [...ids]);
+  const select = jest.fn(async (ids: readonly string[]) => { void ids; });
+  const native = createNativeAnalysisComposition('fast', {
+    getPendingAnalysisIds: (ids) => pending(ids),
+    selectAssets: select,
+  });
+  const result = await native.composition.process(
+    { assetIds: ['android:1:p', 'android:2:p'] },
+    native.capabilities,
+    { runtime: analysisRuntime },
+  );
+  expect(result).toEqual({
+    completed: native.capabilities,
+    unavailable: [],
+    failed: [],
+  });
+  expect(pending).toHaveBeenCalledTimes(3);
+  expect(select).toHaveBeenCalledTimes(1);
+  expect(select).toHaveBeenCalledWith(['android:1:p', 'android:2:p']);
 });
 
 it('dispatches metadata scanning and acknowledges committed batches', async () => {

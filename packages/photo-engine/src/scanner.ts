@@ -4,6 +4,13 @@ import {
   scanOptionsSchema,
   type EngineResult,
   type ScanOptions,
+  AnalysisComposition,
+  CapabilityResolver,
+  createCapabilityRegistry,
+  type AnalysisBatch,
+  type Analyzer,
+  type CapabilityId,
+  type Metric,
 } from '@seleva/core';
 import { libraryAssetSchema } from './library';
 
@@ -44,6 +51,64 @@ export type ScanEventName =
 export type ScanEventListener = (payload: unknown) => void;
 export interface ScanSubscription {
   remove(): void;
+}
+
+export type NativeAnalysisStage = 'fast' | 'deep';
+export interface NativeAnalysisCoordinator {
+  getPendingAnalysisIds(ids: readonly string[], fastOnly: boolean): Promise<string[]>;
+  selectAssets(ids: readonly string[]): Promise<void>;
+}
+
+const fastAnalysisCapabilities: readonly CapabilityId[] = [
+  'content.screenshot',
+  'quality.visual',
+  'similarity.perceptual',
+];
+const deepAnalysisCapabilities: readonly CapabilityId[] = [
+  ...fastAnalysisCapabilities,
+  'duplicate.exact',
+  'text.ocr',
+];
+
+/**
+ * Adapts the native batch protocol to AnalysisComposition. Pixel processing
+ * remains in Kotlin; these providers only resolve cache and dispatch IDs.
+ */
+export function createNativeAnalysisComposition(
+  stage: NativeAnalysisStage,
+  coordinator: NativeAnalysisCoordinator,
+  metric?: Metric,
+): { composition: AnalysisComposition; capabilities: readonly CapabilityId[]; hasDispatched: () => boolean } {
+  const registry = createCapabilityRegistry();
+  const capabilities = stage === 'fast' ? fastAnalysisCapabilities : deepAnalysisCapabilities;
+  let selectionDispatched = false;
+  const dispatch = async (ids: readonly string[]): Promise<void> => {
+    if (selectionDispatched) return;
+    selectionDispatched = true;
+    await coordinator.selectAssets(ids);
+  };
+  for (const capabilityId of capabilities) {
+    const analyzer: Analyzer = {
+      id: `android-native-${stage}`,
+      capabilityId,
+      version: stage === 'fast' ? 'android-fast-2' : 'android-heuristic-2',
+      priority: 100,
+      batchSize: 20,
+      requirements: { nativeApis: ['media-store', 'photo-analysis'] },
+      pending: async (batch: AnalysisBatch) => ({
+        assetIds: await coordinator.getPendingAnalysisIds(batch.assetIds, stage === 'fast'),
+      }),
+      analyzeBatch: async (batch: AnalysisBatch) => {
+        await dispatch(batch.assetIds);
+      },
+    };
+    registry.registerProvider(capabilityId, analyzer);
+  }
+  return {
+    composition: new AnalysisComposition(new CapabilityResolver(registry), metric),
+    capabilities,
+    hasDispatched: () => selectionDispatched,
+  };
 }
 export interface NativeScanTransport {
   startScan(

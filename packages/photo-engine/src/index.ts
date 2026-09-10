@@ -15,6 +15,7 @@ export { createLibraryAccess } from './access';
 export type { PhotoEngine, PhotoEngineError, EngineResult } from '@seleva/core';
 export {
   createPhotoScanner,
+  createNativeAnalysisComposition,
   parseScanBatch,
   parseScanFailure,
   parseScanProgress,
@@ -29,4 +30,6 @@ export type {
   ScanProgress,
   ScanState,
   ScanSubscription,
+  NativeAnalysisCoordinator,
+  NativeAnalysisStage,
 } from './scanner';

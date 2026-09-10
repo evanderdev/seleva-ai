@@ -79,6 +79,20 @@ export class CapabilityRegistry {
     }
     this.plugins.set(manifest.id, { ...plugin, manifest });
   }
+  /** Attach a platform provider to a manifest registered by the catalog. */
+  registerProvider(capabilityId: CapabilityId, provider: Analyzer | QueryProcessor | SearchEngine | RankingEngine): void {
+    const plugin = this.plugins.get(capabilityId);
+    if (!plugin || provider.capabilityId !== capabilityId || !provider.id || !provider.version) throw new Error('INVALID_PROVIDER');
+    const providers = [...(plugin.analyzers ?? []), ...(plugin.queryProcessors ?? []), ...(plugin.searchEngines ?? []), ...(plugin.rankers ?? [])];
+    if (providers.some((candidate) => candidate.id === provider.id)) throw new Error('DUPLICATE_PROVIDER');
+    const next: CapabilityPlugin = { ...plugin };
+    if ('batchSize' in provider) next.analyzers = [...(plugin.analyzers ?? []), provider as Analyzer];
+    else if ('rank' in provider) next.rankers = [...(plugin.rankers ?? []), provider as RankingEngine];
+    else if ('search' in provider) next.searchEngines = [...(plugin.searchEngines ?? []), provider as SearchEngine];
+    else if ('process' in provider) next.queryProcessors = [...(plugin.queryProcessors ?? []), provider as QueryProcessor];
+    else throw new Error('INVALID_PROVIDER');
+    this.plugins.set(capabilityId, next);
+  }
   getCapability(id: CapabilityId): CapabilityPlugin | undefined { return this.plugins.get(id); }
   list(): CapabilityPlugin[] { return [...this.plugins.values()]; }
 }
